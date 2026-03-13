@@ -1,5 +1,5 @@
 "use client";
-import { useMemo } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { DEPT_LABEL } from "./MCApp";
 
 // ─── Dept + tier colors ────────────────────────────────────────────────────────
@@ -35,6 +35,34 @@ const STATUS_INFO = {
 // ─── AgentProfile ─────────────────────────────────────────────────────────────
 
 export default function AgentProfile({ agent, tasks, onClose }) {
+  const [wakeState, setWakeState] = useState("idle"); // idle | sending | sent | error
+  const [wakeError, setWakeError] = useState("");
+
+  const handleWake = useCallback(async () => {
+    setWakeState("sending");
+    setWakeError("");
+    try {
+      const res = await fetch("/api/agents/wake", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agentName: agent.name }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setWakeError(data.error || "Failed to wake agent");
+        setWakeState("error");
+        setTimeout(() => setWakeState("idle"), 4000);
+      } else {
+        setWakeState("sent");
+        setTimeout(() => setWakeState("idle"), 3000);
+      }
+    } catch (err) {
+      setWakeError(err.message);
+      setWakeState("error");
+      setTimeout(() => setWakeState("idle"), 4000);
+    }
+  }, [agent.name]);
+
   const status     = useMemo(() => deriveStatus(agent, tasks), [agent, tasks]);
   const statusInfo = STATUS_INFO[status];
   const deptColor  = DEPT_COLOR[agent.department] || "#c9a96e";
@@ -200,7 +228,7 @@ export default function AgentProfile({ agent, tasks, onClose }) {
         )}
 
         {/* ── Workload stats ── */}
-        <div style={{ padding: "16px 20px" }}>
+        <div style={{ padding: "16px 20px", borderBottom: "1px solid #1e1e1e" }}>
           <div style={{
             fontSize: 10, color: "#555", letterSpacing: 1.5,
             fontWeight: 600, textTransform: "uppercase", marginBottom: 12,
@@ -233,6 +261,56 @@ export default function AgentProfile({ agent, tasks, onClose }) {
             ))}
           </div>
         </div>
+        {/* ── Wake button ── */}
+        <div style={{ padding: "16px 20px" }}>
+          <button
+            onClick={handleWake}
+            disabled={wakeState === "sending" || wakeState === "sent"}
+            style={{
+              width: "100%",
+              padding: "12px 20px",
+              borderRadius: 10,
+              border: wakeState === "error"
+                ? "1px solid #ef444440"
+                : wakeState === "sent"
+                ? "1px solid #10b98140"
+                : "1px solid #2a2a2a",
+              background: wakeState === "error"
+                ? "#ef444410"
+                : wakeState === "sent"
+                ? "#10b98110"
+                : "#1c1c1c",
+              color: wakeState === "error"
+                ? "#ef4444"
+                : wakeState === "sent"
+                ? "#10b981"
+                : wakeState === "sending"
+                ? "#555"
+                : "#e0e0e0",
+              fontSize: 14, fontWeight: 600,
+              cursor: wakeState === "sending" || wakeState === "sent" ? "default" : "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+              transition: "all 0.15s",
+            }}
+          >
+            <span style={{ fontSize: 16 }}>
+              {wakeState === "sent" ? "✓" : wakeState === "error" ? "⚠" : "▶"}
+            </span>
+            {wakeState === "sending" ? "Sending wake signal..." :
+             wakeState === "sent"    ? `${agent.display_name} has been woken` :
+             wakeState === "error"   ? "Failed" :
+             `Wake ${agent.display_name}`}
+          </button>
+          {wakeState === "error" && wakeError && (
+            <div style={{
+              marginTop: 8, fontSize: 11, color: "#ef4444",
+              lineHeight: 1.5, textAlign: "center",
+            }}>
+              {wakeError}
+            </div>
+          )}
+        </div>
+
       </div>
     </div>
   );

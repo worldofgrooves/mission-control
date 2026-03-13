@@ -28,7 +28,7 @@ const ARCHIVE_VIEWS = [
   { id: "done",   label: "Done" },
 ];
 
-export default function Sidebar({ tasks, agents, activeView, onViewChange, onClose, isMobile }) {
+export default function Sidebar({ tasks, agents, activeView, onViewChange, onClose, isMobile, onWakeAgent }) {
   const router = useRouter();
 
   const handleSignOut = useCallback(async () => {
@@ -237,50 +237,71 @@ export default function Sidebar({ tasks, agents, activeView, onViewChange, onClo
             const dotGlow    = isWorking ? "0 0 6px #10b981" : "none";
             const count      = counts[id] || 0;
             return (
-              <button
-                key={id}
-                onClick={() => onViewChange(id)}
-                style={{
-                  display: "flex", alignItems: "center", gap: 10,
-                  width: "100%", padding: "10px 12px",
-                  background: isActive ? "rgba(201,169,110,0.14)" : "transparent",
-                  border: "none", borderRadius: 8, cursor: "pointer",
-                  color: isActive ? "#c9a96e" : "#c8c8c8",
-                  fontSize: 16, textAlign: "left",
-                  transition: "background 0.1s, color 0.1s",
-                  fontWeight: isActive ? 500 : 400,
-                }}
-              >
-                {/* Status dot */}
-                <span style={{
-                  width: 20, display: "flex", alignItems: "center",
-                  justifyContent: "center", flexShrink: 0,
-                }}>
+              <div key={id} style={{ position: "relative", display: "flex", alignItems: "center" }}
+                className="agent-row">
+                <button
+                  onClick={() => onViewChange(id)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 10,
+                    flex: 1, padding: "10px 12px",
+                    background: isActive ? "rgba(201,169,110,0.14)" : "transparent",
+                    border: "none", borderRadius: 8, cursor: "pointer",
+                    color: isActive ? "#c9a96e" : "#c8c8c8",
+                    fontSize: 16, textAlign: "left",
+                    transition: "background 0.1s, color 0.1s",
+                    fontWeight: isActive ? 500 : 400,
+                  }}
+                >
+                  {/* Status dot */}
                   <span style={{
-                    display: "inline-block",
-                    width: 7, height: 7, borderRadius: "50%",
-                    background: dotColor,
-                    boxShadow: dotGlow,
-                    flexShrink: 0,
-                    transition: "background 0.3s, box-shadow 0.3s",
-                  }} />
-                </span>
-                <span style={{
-                  flex: 1, overflow: "hidden",
-                  textOverflow: "ellipsis", whiteSpace: "nowrap",
-                }}>
-                  {a.display_name}
-                </span>
-                {count > 0 && (
-                  <span style={{
-                    fontSize: 14,
-                    color: isActive ? "#c9a96e" : "#666",
-                    minWidth: 20, textAlign: "right", flexShrink: 0,
+                    width: 20, display: "flex", alignItems: "center",
+                    justifyContent: "center", flexShrink: 0,
                   }}>
-                    {count}
+                    <span style={{
+                      display: "inline-block",
+                      width: 7, height: 7, borderRadius: "50%",
+                      background: dotColor,
+                      boxShadow: dotGlow,
+                      flexShrink: 0,
+                      transition: "background 0.3s, box-shadow 0.3s",
+                    }} />
                   </span>
+                  <span style={{
+                    flex: 1, overflow: "hidden",
+                    textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  }}>
+                    {a.display_name}
+                  </span>
+                  {count > 0 && (
+                    <span style={{
+                      fontSize: 14,
+                      color: isActive ? "#c9a96e" : "#666",
+                      minWidth: 20, textAlign: "right", flexShrink: 0,
+                    }}>
+                      {count}
+                    </span>
+                  )}
+                </button>
+                {/* Wake button -- always visible, small ▶ to the right */}
+                {onWakeAgent && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onWakeAgent(a.name); }}
+                    title={`Wake ${a.display_name}`}
+                    style={{
+                      background: "none", border: "none",
+                      color: "#333", fontSize: 10,
+                      cursor: "pointer", padding: "6px 8px",
+                      flexShrink: 0, lineHeight: 1,
+                      borderRadius: 6,
+                      transition: "color 0.1s",
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.color = "#10b981"}
+                    onMouseLeave={e => e.currentTarget.style.color = "#333"}
+                  >
+                    ▶
+                  </button>
                 )}
-              </button>
+              </div>
             );
           })}
         </div>

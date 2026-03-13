@@ -436,6 +436,13 @@ export default function MCApp() {
           onViewChange={handleViewChange}
           onClose={() => setSidebarOpen(false)}
           isMobile={isMobile}
+          onWakeAgent={async (agentName) => {
+            await fetch("/api/agents/wake", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ agentName }),
+            });
+          }}
         />
       </div>
 
