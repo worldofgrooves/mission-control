@@ -1,5 +1,6 @@
 "use client";
-import { useMemo } from "react";
+import { useMemo, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { filterTasks, BRAND_LABEL } from "./MCApp";
 
 const SMART_VIEWS = [
@@ -28,6 +29,12 @@ const ARCHIVE_VIEWS = [
 ];
 
 export default function Sidebar({ tasks, agents, activeView, onViewChange, onClose, isMobile }) {
+  const router = useRouter();
+
+  const handleSignOut = useCallback(async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/login");
+  }, [router]);
   // Pre-compute counts for all views
   const counts = useMemo(() => {
     const result = {};
@@ -150,7 +157,7 @@ export default function Sidebar({ tasks, agents, activeView, onViewChange, onClo
       </div>
 
       {/* Scrollable nav */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "10px 8px 20px" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "10px 8px 12px" }}>
 
         {/* Smart views -- no section label, top level */}
         <div style={{ marginBottom: 8 }}>
@@ -189,6 +196,37 @@ export default function Sidebar({ tasks, agents, activeView, onViewChange, onClo
           <SectionLabel>Archive</SectionLabel>
           {ARCHIVE_VIEWS.map(v => renderItem(v.id, v.label, null))}
         </div>
+      </div>
+
+      {/* Sign out */}
+      <div style={{
+        padding: "10px 8px",
+        borderTop: "1px solid #161616",
+        flexShrink: 0,
+      }}>
+        <button
+          onClick={handleSignOut}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            width: "100%",
+            padding: "10px 12px",
+            background: "transparent",
+            border: "none",
+            borderRadius: 8,
+            cursor: "pointer",
+            color: "#444",
+            fontSize: 14,
+            textAlign: "left",
+            transition: "color 0.1s",
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.color = "#888"}
+          onMouseLeave={(e) => e.currentTarget.style.color = "#444"}
+        >
+          <span style={{ width: 20, textAlign: "center", fontSize: 14, flexShrink: 0 }}>⎋</span>
+          Sign out
+        </button>
       </div>
     </div>
   );
