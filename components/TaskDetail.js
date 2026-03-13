@@ -248,6 +248,26 @@ export default function TaskDetail({
     ? new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
     : null;
 
+  const fmtFull = (iso) => iso
+    ? new Date(iso).toLocaleDateString("en-US", {
+        month: "short", day: "numeric", year: "numeric",
+        hour: "numeric", minute: "2-digit",
+      })
+    : "--";
+
+  const fmtRelative = (iso) => {
+    if (!iso) return "--";
+    const diff = Date.now() - new Date(iso).getTime();
+    const mins  = Math.floor(diff / 60000);
+    const hrs   = Math.floor(mins / 60);
+    const days  = Math.floor(hrs / 24);
+    if (mins < 2)   return "just now";
+    if (mins < 60)  return `${mins}m ago`;
+    if (hrs  < 24)  return `${hrs}h ago`;
+    if (days < 7)   return `${days}d ago`;
+    return fmtFull(iso);
+  };
+
   return (
     <div style={{
       height: "100%",
@@ -516,27 +536,69 @@ export default function TaskDetail({
           </div>
         )}
 
-        {/* ── Notes (plain, no label) ── */}
-        <div style={{ padding: "16px 20px", borderBottom: "1px solid #1e1e1e" }}>
+        {/* ── Context ── */}
+        <div style={{ padding: "14px 20px", borderBottom: "1px solid #1e1e1e" }}>
+          <div style={{
+            fontSize: 10, color: "#555",
+            letterSpacing: 1.5, fontWeight: 600,
+            textTransform: "uppercase", marginBottom: 8,
+          }}>
+            Context
+          </div>
           <textarea
             value={task.description || ""}
             onChange={(e) => onUpdate({ description: e.target.value })}
-            placeholder="Add note"
-            rows={4}
+            placeholder="Add context or briefing notes..."
+            rows={3}
             style={{
               width: "100%",
-              background: "transparent",
+              background: task.description ? "#0e0e0e" : "transparent",
               border: "none",
+              borderRadius: task.description ? 6 : 0,
               outline: "none",
-              color: task.description ? "#c0c0c0" : "#555",
-              fontSize: 15,
-              padding: 0,
+              color: task.description ? "#b0b0b0" : "#555",
+              fontSize: 13,
+              padding: task.description ? "8px 10px" : "2px 0",
               resize: "none",
-              fontFamily: "inherit",
-              lineHeight: 1.65,
+              fontFamily: "ui-monospace, 'SF Mono', monospace",
+              lineHeight: 1.6,
               boxSizing: "border-box",
+              transition: "background 0.15s",
             }}
           />
+        </div>
+
+        {/* ── Timeline ── */}
+        <div style={{ padding: "14px 20px", borderBottom: "1px solid #1e1e1e" }}>
+          <div style={{
+            fontSize: 10, color: "#555",
+            letterSpacing: 1.5, fontWeight: 600,
+            textTransform: "uppercase", marginBottom: 10,
+          }}>
+            Timeline
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 12, color: "#444" }}>Created</span>
+              <span style={{ fontSize: 12, color: "#666" }}>{fmtFull(task.created_at)}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 12, color: "#444" }}>Updated</span>
+              <span style={{ fontSize: 12, color: "#666" }}>{fmtRelative(task.updated_at)}</span>
+            </div>
+            {task.started_at && (
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: 12, color: "#444" }}>Started</span>
+                <span style={{ fontSize: 12, color: "#06b6d4" }}>{fmtFull(task.started_at)}</span>
+              </div>
+            )}
+            {task.completed_at && (
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: 12, color: "#10b981" }}>Completed</span>
+                <span style={{ fontSize: 12, color: "#10b981" }}>{fmtFull(task.completed_at)}</span>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* ── Comments + Deliverables ── */}

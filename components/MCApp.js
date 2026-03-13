@@ -126,6 +126,45 @@ export function getViewTitle(view, agents) {
   return "Tasks";
 }
 
+// ─── Stats Bar ────────────────────────────────────────────────────────────────
+
+function StatChip({ value, label, color = "#c9a96e" }) {
+  return (
+    <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
+      <span style={{ fontSize: 19, fontWeight: 700, color, lineHeight: 1 }}>{value}</span>
+      <span style={{ fontSize: 9, color: "#444", letterSpacing: 1.5, fontWeight: 600, textTransform: "uppercase" }}>
+        {label}
+      </span>
+    </div>
+  );
+}
+
+function StatsBar({ stats }) {
+  return (
+    <div style={{
+      flexShrink: 0,
+      height: 42,
+      background: "#080808",
+      borderBottom: "1px solid #161616",
+      display: "flex",
+      alignItems: "center",
+      padding: "0 20px",
+      gap: 24,
+    }}>
+      <div style={{
+        fontSize: 9, color: "#c9a96e", letterSpacing: 3,
+        fontWeight: 700, marginRight: 4, flexShrink: 0,
+      }}>
+        ◈ MC
+      </div>
+      <StatChip value={stats.agentsActive} label="Agents Active" color="#10b981" />
+      <StatChip value={stats.inQueue}      label="In Queue"      color="#c9a96e" />
+      {stats.blocked > 0      && <StatChip value={stats.blocked}         label="Blocked" color="#ef4444" />}
+      {stats.waitingOnDenver > 0 && <StatChip value={stats.waitingOnDenver} label="Waiting" color="#a855f7" />}
+    </div>
+  );
+}
+
 // ─── Main App ─────────────────────────────────────────────────────────────────
 
 export default function MCApp() {
@@ -219,6 +258,22 @@ export default function MCApp() {
     () => getViewTitle(activeView, agents),
     [activeView, agents]
   );
+
+  // ── Global stats ──
+  const stats = useMemo(() => {
+    const activeAgentIds = new Set(
+      tasks
+        .filter(t => t.status === "in_progress" || t.status === "assigned")
+        .filter(t => t.assignee_agent_id)
+        .map(t => t.assignee_agent_id)
+    );
+    return {
+      agentsActive:    activeAgentIds.size,
+      inQueue:         tasks.filter(t => t.status !== "done" && t.status !== "parked").length,
+      blocked:         tasks.filter(t => t.status === "blocked").length,
+      waitingOnDenver: tasks.filter(t => t.status === "waiting_on_denver").length,
+    };
+  }, [tasks]);
 
   // ── Mutations ──
   const updateTask = useCallback(async (id, fields) => {
@@ -328,11 +383,18 @@ export default function MCApp() {
   return (
     <div style={{
       display: "flex",
+      flexDirection: "column",
       height: "100dvh",
       background: "#000",
       overflow: "hidden",
       color: "#f0f0f0",
     }}>
+      {/* ── Stats bar ── */}
+      <StatsBar stats={stats} />
+
+      {/* ── Main layout (sidebar + content) ── */}
+      <div style={{ flex: 1, display: "flex", overflow: "hidden", minWidth: 0 }}>
+
       {/* Mobile sidebar overlay backdrop */}
       {isMobile && sidebarOpen && (
         <div
@@ -367,7 +429,7 @@ export default function MCApp() {
       </div>
 
       {/* Content area */}
-      <div style={{ flex: 1, display: "flex", overflow: "hidden", minWidth: 0 }}>
+      <div style={{ flex: 1, display: "flex", overflow: "hidden", minWidth: 0, position: "relative" }}>
         {/* Task list -- hidden on mobile when detail is open */}
         {(!isMobile || !showDetail) && (
           <div style={{
@@ -421,6 +483,8 @@ export default function MCApp() {
           </div>
         )}
       </div>
+
+      </div> {/* end main layout */}
     </div>
   );
 }
