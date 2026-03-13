@@ -70,7 +70,7 @@ export default function LoginPage() {
             letterSpacing: 4,
             fontWeight: 700,
           }}>
-            ◈ MISSION CONTROL
+            MISSION CONTROL
           </div>
         </div>
 
