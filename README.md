@@ -18,7 +18,7 @@ cp .env.example .env.local
 
 # Push to GitHub
 git init && git add . && git commit -m "mission control"
-gh repo create worldofgrooves/mission-control --private --push
+gh repo create worldofgrooves/wog-mission-control --private --push
 
 # Deploy to Vercel
 npx vercel --prod
