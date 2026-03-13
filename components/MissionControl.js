@@ -231,16 +231,22 @@ function TaskCard({ task, onClick }) {
 
 // ─── TASK MODAL ───────────────────────────────────────────────────────────────
 
-function TaskModal({ task, onClose }) {
+function TaskModal({ task, onClose, onUpdate }) {
+  const [taskData, setTaskData]     = useState(task);
   const [comments, setComments]     = useState([]);
   const [deliverables, setDelivs]   = useState([]);
   const [loading, setLoading]       = useState(true);
-  const col     = COLS.find(c => c.key === task.status);
-  const p       = PRI[task.priority] || PRI.when_capacity;
-  const b       = task.brand ? BRD[task.brand] : null;
-  const d       = task.department ? DPT[task.department] : null;
-  const tags    = Array.isArray(task.tags) ? task.tags : [];
-  const urgency = deadlineUrgency(task.deadline_at);
+  const [saving, setSaving]         = useState(false);
+  const [showPark, setShowPark]     = useState(false);
+  const [parkReason, setParkReason] = useState("");
+
+  // Derive display values from local taskData (reflects optimistic updates)
+  const col     = COLS.find(c => c.key === taskData.status);
+  const p       = PRI[taskData.priority] || PRI.when_capacity;
+  const b       = taskData.brand ? BRD[taskData.brand] : null;
+  const d       = taskData.department ? DPT[taskData.department] : null;
+  const tags    = Array.isArray(taskData.tags) ? taskData.tags : [];
+  const urgency = deadlineUrgency(taskData.deadline_at);
 
   useEffect(() => {
     async function load() {
@@ -254,6 +260,66 @@ function TaskModal({ task, onClose }) {
     }
     load();
   }, [task.id]);
+
+  // ── Mutations ──
+
+  async function changeStatus(newStatus) {
+    if (saving || taskData.status === newStatus) return;
+    setSaving(true);
+    const updates = { status: newStatus, updated_at: new Date().toISOString() };
+    if (newStatus === "done") updates.completed_at = new Date().toISOString();
+    // Clear parked_reason if moving out of parked
+    if (newStatus !== "parked") updates.parked_reason = null;
+    const { data } = await supabase
+      .from("mc_tasks")
+      .update(updates)
+      .eq("id", task.id)
+      .select("*, mc_agents(display_name, avatar, status)")
+      .single();
+    if (data) {
+      setTaskData(data);
+      if (onUpdate) onUpdate(data);
+    }
+    setSaving(false);
+  }
+
+  async function changePriority(newPriority) {
+    if (saving || taskData.priority === newPriority) return;
+    setSaving(true);
+    const { data } = await supabase
+      .from("mc_tasks")
+      .update({ priority: newPriority, updated_at: new Date().toISOString() })
+      .eq("id", task.id)
+      .select("*, mc_agents(display_name, avatar, status)")
+      .single();
+    if (data) {
+      setTaskData(data);
+      if (onUpdate) onUpdate(data);
+    }
+    setSaving(false);
+  }
+
+  async function parkTask() {
+    if (saving) return;
+    setSaving(true);
+    const { data } = await supabase
+      .from("mc_tasks")
+      .update({
+        status: "parked",
+        parked_reason: parkReason.trim() || "Parked by Denver",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", task.id)
+      .select("*, mc_agents(display_name, avatar, status)")
+      .single();
+    if (data) {
+      setTaskData(data);
+      if (onUpdate) onUpdate(data);
+    }
+    setSaving(false);
+    setShowPark(false);
+    setParkReason("");
+  }
 
   return (
     <div
@@ -275,20 +341,21 @@ function TaskModal({ task, onClose }) {
           boxShadow: "0 0 80px rgba(0,0,0,.8), 0 40px 80px rgba(0,0,0,.9)",
         }}
       >
-        {/* Header */}
+        {/* ── Header (fixed) ── */}
         <div style={{
-          padding: "16px 20px",
+          padding: "16px 20px 0",
           borderBottom: `1px solid ${C.dim}`,
           background: col ? `${col.color}08` : "transparent",
           flexShrink: 0,
         }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 12 }}>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 8, color: col?.color || C.muted, letterSpacing: 2, marginBottom: 6 }}>
-                TASK #{task.task_number} · {task.status.toUpperCase().replace(/_/g, " ")}
+                TASK #{taskData.task_number} · {taskData.status.toUpperCase().replace(/_/g, " ")}
+                {saving && <span style={{ color: C.ghost, marginLeft: 8 }}>saving...</span>}
               </div>
               <div style={{ fontSize: 15, fontWeight: 700, color: "#f0f9ff", lineHeight: 1.3 }}>
-                {task.title}
+                {taskData.title}
               </div>
             </div>
             <button
@@ -297,7 +364,8 @@ function TaskModal({ task, onClose }) {
             >✕</button>
           </div>
 
-          <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 12 }}>
+          {/* Metadata badges */}
+          <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 12 }}>
             <Badge label={p.label} color={p.color} />
             {b && <Badge label={b.label} color={b.color} />}
             {d && <Badge label={d.label} color={d.color} />}
@@ -310,47 +378,178 @@ function TaskModal({ task, onClose }) {
           </div>
 
           {/* Token stats if present */}
-          {(task.token_usage > 0 || task.estimated_cost > 0) && (
-            <div style={{ display: "flex", gap: 16, marginTop: 12, padding: "8px 10px", background: "rgba(6,182,212,.05)", borderRadius: 4, border: `1px solid rgba(6,182,212,.12)` }}>
+          {(taskData.token_usage > 0 || taskData.estimated_cost > 0) && (
+            <div style={{ display: "flex", gap: 16, marginBottom: 12, padding: "8px 10px", background: "rgba(6,182,212,.05)", borderRadius: 4, border: `1px solid rgba(6,182,212,.12)` }}>
               <div>
                 <div style={{ fontSize: 7, color: C.ghost, letterSpacing: 1 }}>TOKENS USED</div>
-                <div style={{ fontSize: 13, color: C.cyan, fontWeight: 700 }}>{formatTokens(task.token_usage)}</div>
+                <div style={{ fontSize: 13, color: C.cyan, fontWeight: 700 }}>{formatTokens(taskData.token_usage)}</div>
               </div>
               <div>
                 <div style={{ fontSize: 7, color: C.ghost, letterSpacing: 1 }}>EST. COST</div>
-                <div style={{ fontSize: 13, color: C.cyan, fontWeight: 700 }}>{formatCost(task.estimated_cost)}</div>
+                <div style={{ fontSize: 13, color: C.cyan, fontWeight: 700 }}>{formatCost(taskData.estimated_cost)}</div>
               </div>
-              {task.assignee_agent_id && (
+              {taskData.assignee_agent_id && (
                 <div>
                   <div style={{ fontSize: 7, color: C.ghost, letterSpacing: 1 }}>AGENT</div>
-                  <div style={{ fontSize: 13, color: C.sec, fontWeight: 700 }}>{task.mc_agents?.display_name || "—"}</div>
+                  <div style={{ fontSize: 13, color: C.sec, fontWeight: 700 }}>{taskData.mc_agents?.display_name || "—"}</div>
                 </div>
               )}
             </div>
           )}
+
+          {/* ── ACTION CONTROLS ── */}
+          <div style={{ paddingBottom: 14 }}>
+
+            {/* Status row */}
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 7, color: C.ghost, letterSpacing: 2, marginBottom: 6 }}>STATUS</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                {COLS.map(c => {
+                  const isActive = taskData.status === c.key;
+                  return (
+                    <button
+                      key={c.key}
+                      disabled={saving || isActive}
+                      onClick={() => changeStatus(c.key)}
+                      style={{
+                        padding: "3px 8px",
+                        fontSize: 8,
+                        letterSpacing: 0.5,
+                        border: `1px solid ${isActive ? c.color : C.border}`,
+                        borderRadius: 3,
+                        background: isActive ? `${c.color}22` : "transparent",
+                        color: isActive ? c.color : C.muted,
+                        cursor: isActive ? "default" : "pointer",
+                        opacity: saving && !isActive ? 0.4 : 1,
+                        transition: "all .12s",
+                        fontFamily: "inherit",
+                      }}
+                    >
+                      {c.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Priority + Park row */}
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 8, flexWrap: "wrap" }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 7, color: C.ghost, letterSpacing: 2, marginBottom: 6 }}>PRIORITY</div>
+                <div style={{ display: "flex", gap: 4 }}>
+                  {Object.entries(PRI).map(([key, val]) => {
+                    const isActive = taskData.priority === key;
+                    return (
+                      <button
+                        key={key}
+                        disabled={saving || isActive}
+                        onClick={() => changePriority(key)}
+                        style={{
+                          padding: "3px 8px",
+                          fontSize: 8,
+                          letterSpacing: 0.5,
+                          border: `1px solid ${isActive ? val.color : C.border}`,
+                          borderRadius: 3,
+                          background: isActive ? `${val.color}22` : "transparent",
+                          color: isActive ? val.color : C.muted,
+                          cursor: isActive ? "default" : "pointer",
+                          opacity: saving && !isActive ? 0.4 : 1,
+                          transition: "all .12s",
+                          fontFamily: "inherit",
+                        }}
+                      >
+                        {val.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Park / Archive button */}
+              <div style={{ flexShrink: 0, paddingTop: 13 }}>
+                {!showPark ? (
+                  <button
+                    onClick={() => setShowPark(true)}
+                    style={{
+                      padding: "3px 10px",
+                      fontSize: 8,
+                      letterSpacing: 0.5,
+                      border: `1px solid ${C.border}`,
+                      borderRadius: 3,
+                      background: "transparent",
+                      color: C.muted,
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                      transition: "border-color .12s, color .12s",
+                    }}
+                  >
+                    ⊠ PARK
+                  </button>
+                ) : (
+                  <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                    <input
+                      autoFocus
+                      value={parkReason}
+                      onChange={e => setParkReason(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === "Enter") parkTask();
+                        if (e.key === "Escape") { setShowPark(false); setParkReason(""); }
+                      }}
+                      placeholder="Reason (optional)"
+                      style={{
+                        background: C.card,
+                        border: `1px solid ${C.border}`,
+                        borderRadius: 3,
+                        color: C.sec,
+                        fontSize: 9,
+                        padding: "4px 8px",
+                        width: 140,
+                        outline: "none",
+                        fontFamily: "inherit",
+                      }}
+                    />
+                    <button
+                      onClick={parkTask}
+                      disabled={saving}
+                      style={{ padding: "3px 8px", fontSize: 8, background: "rgba(100,116,139,.15)", border: "1px solid rgba(100,116,139,.35)", color: C.sec, borderRadius: 3, cursor: "pointer", fontFamily: "inherit" }}
+                    >
+                      Park
+                    </button>
+                    <button
+                      onClick={() => { setShowPark(false); setParkReason(""); }}
+                      style={{ padding: "3px 8px", fontSize: 8, background: "transparent", border: `1px solid ${C.border}`, color: C.ghost, borderRadius: 3, cursor: "pointer", fontFamily: "inherit" }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+          </div>
         </div>
 
-        {/* Body — scrollable */}
+        {/* ── Body (scrollable) ── */}
         <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
           {/* Blocked / parked alerts */}
-          {task.blocked_reason && (
+          {taskData.blocked_reason && (
             <div style={{ margin: "12px 20px 0", padding: "8px 12px", background: "rgba(239,68,68,.08)", borderRadius: 4, border: "1px solid rgba(239,68,68,.25)", borderLeft: "3px solid #ef4444" }}>
               <div style={{ fontSize: 8, color: "#ef4444", letterSpacing: 1, marginBottom: 3 }}>BLOCKED</div>
-              <div style={{ fontSize: 11, color: C.sec }}>{task.blocked_reason}</div>
+              <div style={{ fontSize: 11, color: C.sec }}>{taskData.blocked_reason}</div>
             </div>
           )}
-          {task.parked_reason && (
+          {taskData.parked_reason && (
             <div style={{ margin: "12px 20px 0", padding: "8px 12px", background: "rgba(100,116,139,.08)", borderRadius: 4, border: "1px solid rgba(100,116,139,.25)", borderLeft: "3px solid #64748b" }}>
               <div style={{ fontSize: 8, color: C.muted, letterSpacing: 1, marginBottom: 3 }}>PARKED</div>
-              <div style={{ fontSize: 11, color: C.sec }}>{task.parked_reason}</div>
+              <div style={{ fontSize: 11, color: C.sec }}>{taskData.parked_reason}</div>
             </div>
           )}
 
           {/* Description */}
-          {task.description && (
+          {taskData.description && (
             <div style={{ padding: "14px 20px 0" }}>
               <div style={{ fontSize: 8, color: C.ghost, letterSpacing: 2, marginBottom: 8 }}>DESCRIPTION</div>
-              <div style={{ fontSize: 11, color: C.sec, lineHeight: 1.65 }}>{task.description}</div>
+              <div style={{ fontSize: 11, color: C.sec, lineHeight: 1.65 }}>{taskData.description}</div>
             </div>
           )}
 
@@ -361,7 +560,7 @@ function TaskModal({ task, onClose }) {
             </div>
             {deliverables.length === 0 ? (
               <div style={{ fontSize: 9, color: C.ghost, letterSpacing: 1, padding: "8px 0" }}>
-                {task.status === "done" ? "— NO DELIVERABLES ATTACHED —" : "— PENDING —"}
+                {taskData.status === "done" ? "— NO DELIVERABLES ATTACHED —" : "— PENDING —"}
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -373,6 +572,11 @@ function TaskModal({ task, onClose }) {
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 10, color: C.pri, fontWeight: 600, marginBottom: 2 }}>{dv.title}</div>
                         {dv.summary && <div style={{ fontSize: 9, color: C.muted, lineHeight: 1.4 }}>{dv.summary}</div>}
+                        {dv.content && dv.content.startsWith("http") && (
+                          <a href={dv.content} target="_blank" rel="noreferrer" style={{ fontSize: 9, color: C.cyan, textDecoration: "none" }}>
+                            ↗ Open
+                          </a>
+                        )}
                         {dv.url && (
                           <a href={dv.url} target="_blank" rel="noreferrer" style={{ fontSize: 9, color: C.cyan, textDecoration: "none" }}>
                             ↗ Open
@@ -460,7 +664,6 @@ function AgentPanel({ agents, selAgent, onSelect, tasks, isMobile, onClose }) {
           const open = tasks.filter(t => t.assignee_agent_id === a.id && !["done", "parked"].includes(t.status)).length;
           const dept = a.department ? DPT[a.department] : null;
           const sel  = selAgent?.id === a.id;
-          // Rough token total across agent's tasks
           const agentTokens = tasks.filter(t => t.assignee_agent_id === a.id).reduce((sum, t) => sum + (t.token_usage || 0), 0);
 
           return (
@@ -506,7 +709,6 @@ function AgentPanel({ agents, selAgent, onSelect, tasks, isMobile, onClose }) {
 // ─── LIVE FEED ────────────────────────────────────────────────────────────────
 
 function LiveFeed({ comments, isMobile, onClose }) {
-  // Separate check-ins from regular activity
   const checkins  = comments.filter(c => c.comment_type === "checkin");
   const activity  = comments.filter(c => c.comment_type !== "checkin");
 
@@ -535,8 +737,6 @@ function LiveFeed({ comments, isMobile, onClose }) {
       </div>
 
       <div style={{ flex: 1, overflowY: "auto" }}>
-
-        {/* Agent check-ins section */}
         {checkins.length > 0 && (
           <div style={{ padding: "8px 8px 0" }}>
             <div style={{ fontSize: 7, color: "#10b981", letterSpacing: 2, marginBottom: 6, padding: "0 4px" }}>
@@ -554,7 +754,6 @@ function LiveFeed({ comments, isMobile, onClose }) {
           </div>
         )}
 
-        {/* Activity feed */}
         <div style={{ padding: "8px" }}>
           {checkins.length > 0 && (
             <div style={{ fontSize: 7, color: C.ghost, letterSpacing: 2, marginBottom: 6, padding: "4px 4px 0" }}>
@@ -585,44 +784,6 @@ function LiveFeed({ comments, isMobile, onClose }) {
           })}
         </div>
       </div>
-    </div>
-  );
-}
-
-// ─── COST SUMMARY BAR ─────────────────────────────────────────────────────────
-
-function CostBar({ tasks }) {
-  const totalTokens = tasks.reduce((s, t) => s + (t.token_usage || 0), 0);
-  const totalCost   = tasks.reduce((s, t) => s + (t.estimated_cost || 0), 0);
-  const today = tasks
-    .filter(t => t.last_activity_at && new Date(t.last_activity_at) > new Date(Date.now() - 86400000))
-    .reduce((s, t) => s + (t.token_usage || 0), 0);
-
-  if (totalTokens === 0) return null;
-
-  return (
-    <div style={{
-      display: "flex",
-      gap: 16,
-      padding: "0 16px",
-      alignItems: "center",
-      borderLeft: `1px solid ${C.border}`,
-      marginLeft: 8,
-    }}>
-      <div style={{ textAlign: "center" }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: C.cyan }}>{formatTokens(totalTokens)}</div>
-        <div style={{ fontSize: 7, color: C.ghost, letterSpacing: 1 }}>TOTAL TOKENS</div>
-      </div>
-      <div style={{ textAlign: "center" }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: "#10b981" }}>{formatCost(totalCost)}</div>
-        <div style={{ fontSize: 7, color: C.ghost, letterSpacing: 1 }}>TOTAL COST</div>
-      </div>
-      {today > 0 && (
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "#f59e0b" }}>{formatTokens(today)}</div>
-          <div style={{ fontSize: 7, color: C.ghost, letterSpacing: 1 }}>TODAY</div>
-        </div>
-      )}
     </div>
   );
 }
@@ -679,7 +840,6 @@ function KanbanBoard({ tasks, onTaskClick, isMobile, brandFilter }) {
   });
 
   if (isMobile) {
-    // Mobile: single scrollable list grouped by status
     const active = COLS.filter(c => c.key !== "done" && c.key !== "parked");
     return (
       <div style={{ flex: 1, overflowY: "auto", padding: "8px" }}>
@@ -699,7 +859,6 @@ function KanbanBoard({ tasks, onTaskClick, isMobile, brandFilter }) {
             </div>
           );
         })}
-        {/* Done section collapsed */}
         {(() => {
           const doneTasks = filtered.filter(t => t.status === "done");
           if (doneTasks.length === 0) return null;
@@ -787,7 +946,6 @@ export default function MissionControl() {
   const [mobileView,  setMobileView]  = useState("board");
   const [isMobile,    setIsMobile]    = useState(false);
 
-  // Detect mobile
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
     check();
@@ -813,6 +971,12 @@ export default function MissionControl() {
     const interval = setInterval(loadAll, 20000);
     return () => clearInterval(interval);
   }, [loadAll]);
+
+  // When a task is updated inside the modal, reflect it immediately on the board
+  const handleTaskUpdate = useCallback((updated) => {
+    setTasks(prev => prev.map(t => t.id === updated.id ? { ...t, ...updated } : t));
+    setSelTask(updated);
+  }, []);
 
   const displayTasks = selAgent
     ? tasks.filter(t => t.assignee_agent_id === selAgent.id)
@@ -878,7 +1042,6 @@ export default function MissionControl() {
 
         <div style={{ flex: 1 }} />
 
-        {/* Stats */}
         {!isMobile && (
           <>
             {[
@@ -907,7 +1070,6 @@ export default function MissionControl() {
           </div>
         )}
 
-        {/* Token burn summary (desktop) */}
         {!isMobile && totalTokens > 0 && (
           <>
             <div style={{ display: "flex", gap: 12, padding: "0 12px", alignItems: "center", borderLeft: `1px solid ${C.border}` }}>
@@ -924,7 +1086,6 @@ export default function MissionControl() {
           </>
         )}
 
-        {/* Brand filters */}
         {!isMobile && (
           <div style={{ display: "flex", gap: 4 }}>
             {["all", "wog", "plume", "artifact"].map(f => (
@@ -949,7 +1110,6 @@ export default function MissionControl() {
           </div>
         )}
 
-        {/* Refresh */}
         <button
           onClick={loadAll}
           style={{ background: "transparent", border: `1px solid ${C.dim}`, color: C.ghost, cursor: "pointer", padding: "3px 8px", borderRadius: 4, fontSize: isMobile ? 14 : 12 }}
@@ -960,9 +1120,7 @@ export default function MissionControl() {
 
       {/* ── BODY ── */}
       {isMobile ? (
-        // ── MOBILE LAYOUT ──
         <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 0 }}>
-          {/* Mobile brand filter bar */}
           <div style={{ display: "flex", gap: 4, padding: "6px 10px", borderBottom: `1px solid ${C.dim}`, flexShrink: 0, overflowX: "auto" }}>
             {["all", "wog", "plume", "artifact", "groove_dwellers"].map(f => (
               <button
@@ -1009,7 +1167,6 @@ export default function MissionControl() {
           <MobileNav view={mobileView} setView={setMobileView} stats={stats} />
         </div>
       ) : (
-        // ── DESKTOP LAYOUT ──
         <div style={{ display: "flex", flex: 1, overflow: "hidden", minHeight: 0 }}>
           <AgentPanel
             agents={agents}
@@ -1028,7 +1185,13 @@ export default function MissionControl() {
       )}
 
       {/* ── TASK MODAL ── */}
-      {selTask && <TaskModal task={selTask} onClose={() => setSelTask(null)} />}
+      {selTask && (
+        <TaskModal
+          task={selTask}
+          onClose={() => setSelTask(null)}
+          onUpdate={handleTaskUpdate}
+        />
+      )}
     </div>
   );
 }
