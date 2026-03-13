@@ -231,10 +231,11 @@ export default function MCApp() {
   const quickCapture = useCallback(async (title) => {
     if (!title.trim()) return;
     const fields = {
-      title: title.trim(),
-      status: "inbox",
-      priority: "when_capacity",
-      created_by: "denver",
+      title:       title.trim(),
+      description: "",           // NOT NULL column -- required
+      status:      "inbox",
+      priority:    "when_capacity",
+      created_by:  "denver",
     };
     // Pre-fill context from active view
     if (activeView === "my-day")       { fields.flagged_today = true; fields.priority = "immediate"; }
@@ -245,11 +246,12 @@ export default function MCApp() {
     }
     if (activeView.startsWith("brand:")) fields.brand = activeView.slice(6);
 
-    const { data } = await sb.from("mc_tasks")
+    const { data, error } = await sb.from("mc_tasks")
       .insert(fields)
       .select("*, mc_agents(id, name, display_name)")
       .single();
-    if (data) setTasks(prev => [data, ...prev]);
+    if (error) { console.error("quickCapture failed:", error.message); return; }
+    if (data)  setTasks(prev => [data, ...prev]);
   }, [activeView]);
 
   const addComment = useCallback(async (taskId, body) => {
