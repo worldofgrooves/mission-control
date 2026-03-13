@@ -5,6 +5,7 @@ import Sidebar from "./Sidebar";
 import TaskList from "./TaskList";
 import TaskDetail from "./TaskDetail";
 import AgentProfile from "./AgentProfile";
+import LiveFeed from "./LiveFeed";
 
 const sb = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -176,13 +177,17 @@ export default function MCApp() {
   const [selectedId,    setSelectedId]    = useState(null);
   const [detailData,    setDetailData]    = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [sidebarOpen,   setSidebarOpen]   = useState(false);
-  const [isMobile,      setIsMobile]      = useState(false);
+  const [sidebarOpen,    setSidebarOpen]   = useState(false);
+  const [isMobile,       setIsMobile]      = useState(false);
+  const [isDesktop,      setIsDesktop]     = useState(false);
   const [profileAgentId, setProfileAgentId] = useState(null);
 
   // ── Responsive ──
   useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768);
+    const check = () => {
+      setIsMobile(window.innerWidth < 768);
+      setIsDesktop(window.innerWidth >= 1280);
+    };
     check();
     window.addEventListener("resize", check);
     return () => window.removeEventListener("resize", check);
@@ -440,7 +445,9 @@ export default function MCApp() {
         {(!isMobile || !showDetail) && (
           <div style={{
             flex:     showDetail && !isMobile ? "0 0 auto" : 1,
-            width:    showDetail && !isMobile ? `calc(100% - 400px)` : "100%",
+            width:    showDetail && !isMobile
+              ? `calc(100% - 400px${isDesktop ? " - 280px" : ""})`
+              : "100%",
             minWidth: 0,
             display:  "flex",
             flexDirection: "column",
@@ -489,6 +496,9 @@ export default function MCApp() {
             />
           </div>
         )}
+
+        {/* Live Feed -- desktop right rail (>= 1280px) */}
+        {isDesktop && <LiveFeed agents={agents} />}
       </div>
 
       </div> {/* end main layout */}
