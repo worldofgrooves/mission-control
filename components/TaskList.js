@@ -31,8 +31,8 @@ function TaskRow({ task, agents, isSelected, onSelect, onToggleComplete, onToggl
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 10,
-        padding: "8px 16px",
+        gap: 12,
+        padding: "12px 16px",
         background: isSelected ? "#141414" : hovered ? "#0c0c0c" : "transparent",
         cursor: "pointer",
         borderLeft: isSelected ? "2px solid #c9a96e" : "2px solid transparent",
@@ -43,8 +43,8 @@ function TaskRow({ task, agents, isSelected, onSelect, onToggleComplete, onToggl
       <button
         onClick={(e) => { e.stopPropagation(); onToggleComplete(task); }}
         style={{
-          width: 18,
-          height: 18,
+          width: 22,
+          height: 22,
           borderRadius: "50%",
           border: isDone
             ? "2px solid #10b981"
@@ -66,8 +66,8 @@ function TaskRow({ task, agents, isSelected, onSelect, onToggleComplete, onToggl
       {/* Content */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
-          fontSize: 14,
-          color: isDone ? "#444" : "#e8e8e8",
+          fontSize: 15,
+          color: isDone ? "#444" : "#f0f0f0",
           textDecoration: isDone ? "line-through" : "none",
           whiteSpace: "nowrap",
           overflow: "hidden",
@@ -100,19 +100,19 @@ function TaskRow({ task, agents, isSelected, onSelect, onToggleComplete, onToggl
               </span>
             )}
             {agent && (
-              <span style={{ fontSize: 11, color: "#555", flexShrink: 0 }}>
+              <span style={{ fontSize: 12, color: "#777", flexShrink: 0 }}>
                 {agent.display_name || agent.name}
               </span>
             )}
             {deadlineMeta && (
-              <span style={{ fontSize: 11, color: deadlineMeta.color, flexShrink: 0 }}>
+              <span style={{ fontSize: 12, color: deadlineMeta.color, flexShrink: 0 }}>
                 {deadlineMeta.text}
               </span>
             )}
             {task.brand && task.brand !== "shared" && (
               <span style={{
                 fontSize: 10,
-                color: "#3a3a3a",
+                color: "#555",
                 whiteSpace: "nowrap",
                 overflow: "hidden",
                 textOverflow: "ellipsis",
@@ -134,9 +134,9 @@ function TaskRow({ task, agents, isSelected, onSelect, onToggleComplete, onToggl
             ? "#c9a96e"
             : hovered ? "#2a2a2a" : "transparent",
           cursor: "pointer",
-          fontSize: 15,
+          fontSize: 18,
           flexShrink: 0,
-          padding: "2px 4px",
+          padding: "4px 6px",
           transition: "color 0.12s",
           lineHeight: 1,
         }}
@@ -268,7 +268,7 @@ export default function TaskList({
               border: "none",
               outline: "none",
               color: "#f0f0f0",
-              fontSize: 13,
+              fontSize: 15,
             }}
           />
           {captureText && (

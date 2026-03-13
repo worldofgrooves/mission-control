@@ -57,33 +57,34 @@ export default function Sidebar({ tasks, agents, activeView, onViewChange, onClo
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 8,
+          gap: 10,
           width: "100%",
-          padding: "6px 12px",
-          background: isActive ? "rgba(201,169,110,0.12)" : "transparent",
+          padding: "10px 12px",
+          background: isActive ? "rgba(201,169,110,0.14)" : "transparent",
           border: "none",
-          borderRadius: 6,
+          borderRadius: 8,
           cursor: "pointer",
-          color: isActive ? "#c9a96e" : "#888",
-          fontSize: 13,
+          color: isActive ? "#c9a96e" : "#c8c8c8",
+          fontSize: 16,
           textAlign: "left",
           transition: "background 0.1s, color 0.1s",
+          fontWeight: isActive ? 500 : 400,
         }}
       >
         {icon && (
-          <span style={{ width: 16, textAlign: "center", fontSize: 13, flexShrink: 0 }}>
+          <span style={{ width: 20, textAlign: "center", fontSize: 16, flexShrink: 0 }}>
             {icon}
           </span>
         )}
-        {!icon && <span style={{ width: 16, flexShrink: 0 }} />}
+        {!icon && <span style={{ width: 20, flexShrink: 0 }} />}
         <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {label}
         </span>
         {count > 0 && (
           <span style={{
-            fontSize: 11,
-            color: isActive ? "#c9a96e" : "#444",
-            minWidth: 16,
+            fontSize: 14,
+            color: isActive ? "#c9a96e" : "#666",
+            minWidth: 20,
             textAlign: "right",
             flexShrink: 0,
           }}>
@@ -96,13 +97,13 @@ export default function Sidebar({ tasks, agents, activeView, onViewChange, onClo
 
   const SectionLabel = ({ children }) => (
     <div style={{
-      fontSize: 10,
-      color: "#333",
-      letterSpacing: 2,
+      fontSize: 11,
+      color: "#555",
+      letterSpacing: 1.5,
       padding: "0 12px",
       marginBottom: 2,
-      marginTop: 4,
-      fontWeight: 700,
+      marginTop: 6,
+      fontWeight: 600,
       textTransform: "uppercase",
     }}>
       {children}
