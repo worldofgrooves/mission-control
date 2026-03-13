@@ -238,13 +238,15 @@ function DeliverableFeedItem({ item, agents, onTaskSelect, onAgentProfile }) {
               }}>
                 {item.deliverable_title}
               </span>
-              <span style={{
-                fontSize: 9, color: "#10b981",
-                background: "#10b98118", padding: "1px 5px", borderRadius: 3,
-                flexShrink: 0, fontWeight: 600, letterSpacing: 0.5,
-              }}>
-                DELIVERED
-              </span>
+              {item.task_status === "done" && (
+                <span style={{
+                  fontSize: 9, color: "#10b981",
+                  background: "#10b98118", padding: "1px 5px", borderRadius: 3,
+                  flexShrink: 0, fontWeight: 600, letterSpacing: 0.5,
+                }}>
+                  DELIVERED
+                </span>
+              )}
             </div>
           </Clickable>
         </div>
@@ -266,7 +268,7 @@ export default function LiveFeed({ agents, onTaskSelect, onAgentProfile }) {
         .order("created_at", { ascending: false })
         .limit(20),
       sb.from("mc_task_deliverables")
-        .select("id, created_by, type, title, summary, created_at, mc_tasks(id, task_number, title)")
+        .select("id, created_by, type, title, summary, created_at, mc_tasks(id, task_number, title, status)")
         .order("created_at", { ascending: false })
         .limit(20),
     ]);
@@ -295,6 +297,7 @@ export default function LiveFeed({ agents, onTaskSelect, onAgentProfile }) {
       task_id:           d.mc_tasks?.id,     // for onTaskSelect
       task_number:       d.mc_tasks?.task_number,
       task_title:        d.mc_tasks?.title,
+      task_status:       d.mc_tasks?.status,
     }));
 
     const merged = [...comments, ...deliverables].sort(
