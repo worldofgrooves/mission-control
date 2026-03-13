@@ -204,9 +204,10 @@ export default function MCApp() {
   const updateTask = useCallback(async (id, fields) => {
     // Optimistic update
     setTasks(prev => prev.map(t => t.id === id ? { ...t, ...fields } : t));
-    await sb.from("mc_tasks")
+    const { error } = await sb.from("mc_tasks")
       .update({ ...fields, updated_at: new Date().toISOString() })
       .eq("id", id);
+    if (error) console.error("updateTask failed:", error.message, fields);
   }, []);
 
   const toggleComplete = useCallback(async (task) => {
