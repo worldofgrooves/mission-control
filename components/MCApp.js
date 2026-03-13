@@ -498,7 +498,13 @@ export default function MCApp() {
         )}
 
         {/* Live Feed -- desktop right rail (>= 1280px) */}
-        {isDesktop && <LiveFeed agents={agents} />}
+        {isDesktop && (
+          <LiveFeed
+            agents={agents}
+            onTaskSelect={handleTaskSelect}
+            onAgentProfile={handleAgentProfile}
+          />
+        )}
       </div>
 
       </div> {/* end main layout */}
