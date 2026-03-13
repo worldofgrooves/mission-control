@@ -206,6 +206,15 @@ export default function MCApp() {
     [tasks, activeView]
   );
 
+  // Completed tasks for the current agent view (shown as collapsible section in TaskList)
+  const agentCompletedTasks = useMemo(() => {
+    if (!activeView.startsWith("agent:")) return [];
+    const agentPart = activeView.slice(6);
+    if (agentPart.endsWith(":done")) return [];
+    if (agentPart === "unassigned") return tasks.filter(t => t.status === "done" && !t.assignee_agent_id);
+    return tasks.filter(t => t.status === "done" && t.assignee_agent_id === agentPart);
+  }, [tasks, activeView]);
+
   const viewTitle = useMemo(
     () => getViewTitle(activeView, agents),
     [activeView, agents]
@@ -370,6 +379,7 @@ export default function MCApp() {
           }}>
             <TaskList
               tasks={viewTasks}
+              completedTasks={agentCompletedTasks}
               viewTitle={viewTitle}
               activeView={activeView}
               agents={agents}

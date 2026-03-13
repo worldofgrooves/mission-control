@@ -48,10 +48,8 @@ export default function Sidebar({ tasks, agents, activeView, onViewChange, onClo
       result[id] = filterTasks(tasks, id).length;
     }
     result["agent:unassigned"] = filterTasks(tasks, "agent:unassigned").length;
-    result["agent:unassigned:done"] = filterTasks(tasks, "agent:unassigned:done").length;
     for (const agent of agents) {
       result[`agent:${agent.id}`] = filterTasks(tasks, `agent:${agent.id}`).length;
-      result[`agent:${agent.id}:done`] = filterTasks(tasks, `agent:${agent.id}:done`).length;
     }
     return result;
   }, [tasks, agents]);
@@ -93,47 +91,6 @@ export default function Sidebar({ tasks, agents, activeView, onViewChange, onClo
           <span style={{
             fontSize: 14,
             color: isActive ? "#c9a96e" : "#666",
-            minWidth: 20,
-            textAlign: "right",
-            flexShrink: 0,
-          }}>
-            {count}
-          </span>
-        )}
-      </button>
-    );
-  };
-
-  const renderSubItem = (id, label) => {
-    const isActive = activeView === id;
-    const count = counts[id] || 0;
-    return (
-      <button
-        key={id}
-        onClick={() => onViewChange(id)}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          width: "100%",
-          padding: "5px 12px 5px 44px",
-          background: isActive ? "rgba(201,169,110,0.10)" : "transparent",
-          border: "none",
-          borderRadius: 8,
-          cursor: "pointer",
-          color: isActive ? "#c9a96e" : "#666",
-          fontSize: 14,
-          textAlign: "left",
-          fontWeight: isActive ? 500 : 400,
-          transition: "background 0.1s, color 0.1s",
-        }}
-      >
-        <span style={{ fontSize: 11, flexShrink: 0, opacity: 0.8 }}>✓</span>
-        <span style={{ flex: 1 }}>{label}</span>
-        {count > 0 && (
-          <span style={{
-            fontSize: 13,
-            color: isActive ? "#c9a96e" : "#555",
             minWidth: 20,
             textAlign: "right",
             flexShrink: 0,
@@ -221,11 +178,7 @@ export default function Sidebar({ tasks, agents, activeView, onViewChange, onClo
         <div style={{ marginBottom: 8 }}>
           <SectionLabel>Agents</SectionLabel>
           {renderItem("agent:unassigned", "Denver", "○")}
-          {renderSubItem("agent:unassigned:done", "Completed")}
-          {agents.flatMap(a => [
-            renderItem(`agent:${a.id}`, a.display_name, "●"),
-            renderSubItem(`agent:${a.id}:done`, "Completed"),
-          ])}
+          {agents.map(a => renderItem(`agent:${a.id}`, a.display_name, "●"))}
         </div>
 
         <div style={{ height: 1, background: "#161616", margin: "6px 8px 10px" }} />

@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { PRI_COLOR, PRI_ORDER, STATUS_COLOR, STATUS_LABEL, BRAND_LABEL } from "./MCApp";
 
 // ─── Task Card ────────────────────────────────────────────────────────────────
@@ -146,7 +146,9 @@ function TaskRow({ task, agents, isSelected, onSelect, onToggleComplete, onToggl
 
 export default function TaskList({
   tasks,
+  completedTasks = [],
   viewTitle,
+  activeView,
   agents,
   selectedId,
   isMobile,
@@ -160,8 +162,13 @@ export default function TaskList({
   const [showDone, setShowDone]       = useState(false);
   const inputRef = useRef(null);
 
-  const activeTasks = tasks.filter(t => t.status !== "done");
-  const doneTasks   = tasks.filter(t => t.status === "done");
+  // Collapse completed section whenever the view changes
+  useEffect(() => { setShowDone(false); }, [activeView]);
+
+  // tasks prop only contains active tasks (filtered by MCApp)
+  // completedTasks is passed separately for agent views
+  const activeTasks = tasks;
+  const doneTasks   = completedTasks;
 
   const sorted = [...activeTasks].sort((a, b) => {
     const pA = PRI_ORDER[a.priority] ?? 3;
