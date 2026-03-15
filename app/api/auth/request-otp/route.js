@@ -38,11 +38,7 @@ export async function POST(request) {
     // Send email via Resend
     const resend = new Resend(process.env.RESEND_API_KEY)
 
-    // Use RESEND_FROM env var if set, otherwise fall back to onboarding@resend.dev
-    // (onboarding@resend.dev works without domain verification but only sends to your Resend account email)
-    // To send to any address, verify worldofgrooves.com in Resend dashboard and set:
-    // RESEND_FROM=Mission Control <noreply@worldofgrooves.com>
-    const fromAddress = process.env.RESEND_FROM || 'onboarding@resend.dev'
+    const fromAddress = process.env.RESEND_FROM || 'Mission Control <noreply@worldofgrooves.com>'
 
     const { data: emailData, error: emailError } = await resend.emails.send({
       from: fromAddress,
