@@ -6,8 +6,15 @@ export async function POST(request) {
   try {
     const { email } = await request.json()
 
-    // Always return success to avoid leaking info about valid emails
-    if (!email || email.toLowerCase() !== (process.env.DENVER_EMAIL || '').toLowerCase()) {
+    if (!email) {
+      return NextResponse.json({ error: 'Email required' }, { status: 400 })
+    }
+
+    // If DENVER_EMAIL is set, only allow that address
+    const allowedEmail = process.env.DENVER_EMAIL
+    if (allowedEmail && email.toLowerCase() !== allowedEmail.toLowerCase()) {
+      // Silent no-op -- don't leak that this email isn't authorized
+      console.log('request-otp: email not in allowlist, skipping')
       return NextResponse.json({ ok: true })
     }
 
@@ -30,8 +37,15 @@ export async function POST(request) {
 
     // Send email via Resend
     const resend = new Resend(process.env.RESEND_API_KEY)
-    await resend.emails.send({
-      from: 'Mission Control <noreply@worldofgrooves.com>',
+
+    // Use RESEND_FROM env var if set, otherwise fall back to onboarding@resend.dev
+    // (onboarding@resend.dev works without domain verification but only sends to your Resend account email)
+    // To send to any address, verify worldofgrooves.com in Resend dashboard and set:
+    // RESEND_FROM=Mission Control <noreply@worldofgrooves.com>
+    const fromAddress = process.env.RESEND_FROM || 'onboarding@resend.dev'
+
+    const { data: emailData, error: emailError } = await resend.emails.send({
+      from: fromAddress,
       to: email,
       subject: `${code} -- Mission Control access code`,
       html: `
@@ -43,9 +57,18 @@ export async function POST(request) {
       `,
     })
 
+    if (emailError) {
+      console.error('Resend error:', JSON.stringify(emailError))
+      return NextResponse.json(
+        { error: `Email send failed: ${emailError.message || JSON.stringify(emailError)}` },
+        { status: 500 }
+      )
+    }
+
+    console.log('OTP sent successfully, email id:', emailData?.id)
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error('request-otp error:', err)
-    return NextResponse.json({ error: 'Something went wrong' }, { status: 500 })
+    return NextResponse.json({ error: String(err.message || err) }, { status: 500 })
   }
 }

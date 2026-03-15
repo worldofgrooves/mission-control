@@ -24,13 +24,14 @@ export default function LoginPage() {
         body: JSON.stringify({ email: email.trim().toLowerCase() }),
       });
 
+      const body = await res.json().catch(() => ({}));
       if (res.ok) {
         setStep("code");
       } else {
-        setError("Something went wrong. Try again.");
+        setError(body.error || "Something went wrong. Try again.");
       }
-    } catch {
-      setError("Something went wrong. Try again.");
+    } catch (err) {
+      setError(err.message || "Something went wrong. Try again.");
     } finally {
       setLoading(false);
     }
