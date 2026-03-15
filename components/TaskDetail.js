@@ -329,8 +329,8 @@ export default function TaskDetail({
               onClick={onClose}
               style={{
                 background: "none", border: "none",
-                color: "#555", cursor: "pointer",
-                fontSize: 24, padding: "4px 6px", lineHeight: 1,
+                color: "#666", cursor: "pointer",
+                fontSize: 30, padding: "2px 8px", lineHeight: 1,
                 transition: "color 0.1s",
               }}
               onMouseEnter={(e) => e.currentTarget.style.color = "#aaa"}
@@ -502,8 +502,10 @@ export default function TaskDetail({
                 if (!task.deadline_at || task.flagged_today) return false;
                 const d = new Date(task.deadline_at);
                 const now = new Date();
-                const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-                return d >= now && d <= end;
+                // Exclude dates within "This Week" so only one pill is ever active at a time
+                const weekEnd = new Date(now); weekEnd.setDate(now.getDate() + (7 - now.getDay())); weekEnd.setHours(23, 59, 59);
+                const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+                return d > weekEnd && d <= monthEnd;
               })(),
               action: () => {
                 const end = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59);
