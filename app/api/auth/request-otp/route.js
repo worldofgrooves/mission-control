@@ -10,12 +10,14 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Email required' }, { status: 400 })
     }
 
-    // If DENVER_EMAIL is set, only allow that address
+    // If DENVER_EMAIL is set, only allow that address -- show error so mismatches are visible
     const allowedEmail = process.env.DENVER_EMAIL
     if (allowedEmail && email.toLowerCase() !== allowedEmail.toLowerCase()) {
-      // Silent no-op -- don't leak that this email isn't authorized
-      console.log('request-otp: email not in allowlist, skipping')
-      return NextResponse.json({ ok: true })
+      console.log(`request-otp: email mismatch. received="${email}" allowed="${allowedEmail}"`)
+      return NextResponse.json(
+        { error: `Email not recognized. Expected: ${allowedEmail}` },
+        { status: 403 }
+      )
     }
 
     // Generate 6-digit code
