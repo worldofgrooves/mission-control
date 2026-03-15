@@ -5,7 +5,7 @@ import KanbanBoard from "./KanbanBoard";
 
 // ─── Task Card ────────────────────────────────────────────────────────────────
 
-function TaskRow({ task, agents, isSelected, onSelect, onToggleComplete, onToggleStar, onToggleMyDay }) {
+function TaskRow({ task, agents, isSelected, onSelect, onToggleComplete, onToggleStar, onToggleMyDay, showDragHandle }) {
   const isDone      = task.status === "done";
   const isImportant = task.priority === "immediate";
 
@@ -33,7 +33,7 @@ function TaskRow({ task, agents, isSelected, onSelect, onToggleComplete, onToggl
         display: "flex",
         alignItems: "center",
         gap: 12,
-        padding: "14px 14px",
+        padding: showDragHandle ? "14px 14px 14px 10px" : "14px 14px",
         background: isSelected ? "#2a2a2a" : "#1c1c1c",
         cursor: "pointer",
         borderRadius: 10,
@@ -42,6 +42,25 @@ function TaskRow({ task, agents, isSelected, onSelect, onToggleComplete, onToggl
         transition: "background 0.1s",
       }}
     >
+      {/* Drag handle -- only shown when reordering is active */}
+      {showDragHandle && (
+        <div
+          style={{
+            color: "#282828",
+            fontSize: 15,
+            cursor: "grab",
+            flexShrink: 0,
+            lineHeight: 1,
+            userSelect: "none",
+            padding: "0 1px",
+          }}
+          onMouseEnter={e => e.currentTarget.style.color = "#555"}
+          onMouseLeave={e => e.currentTarget.style.color = "#282828"}
+        >
+          ⠿
+        </div>
+      )}
+
       {/* Complete circle */}
       <button
         onClick={(e) => { e.stopPropagation(); onToggleComplete(task); }}
@@ -227,10 +246,13 @@ export default function TaskList({
   onMenuOpen,
   onAgentProfile,
   onStatusChange,
+  onReorder,
 }) {
   const [captureText, setCaptureText] = useState("");
   const [showDone, setShowDone]       = useState(false);
   const [viewMode,  setViewMode]      = useState("list");
+  const [dropIdx,   setDropIdx]       = useState(null);
+  const dragIdx = useRef(null);
   const inputRef = useRef(null);
 
   // Collapse completed section whenever the view changes
@@ -241,13 +263,23 @@ export default function TaskList({
   const activeTasks = tasks;
   const doneTasks   = completedTasks;
 
+  const isAgentView = activeView.startsWith("agent:");
   const sorted = [...activeTasks].sort((a, b) => {
-    const pA = PRI_ORDER[a.priority] ?? 3;
-    const pB = PRI_ORDER[b.priority] ?? 3;
+    if (isAgentView) {
+      // Agent views: respect sort_order fully so drag order is authoritative
+      const sA = a.sort_order, sB = b.sort_order;
+      if (sA != null && sB != null) return sA - sB;
+      if (sA != null) return -1;
+      if (sB != null) return 1;
+      return (a.task_number || 0) - (b.task_number || 0);
+    }
+    // All other views: priority first, then sort_order, then newest
+    const pA = PRI_ORDER[a.priority] ?? 3, pB = PRI_ORDER[b.priority] ?? 3;
     if (pA !== pB) return pA - pB;
-    const posA = a.position ?? 9999;
-    const posB = b.position ?? 9999;
-    if (posA !== posB) return posA - posB;
+    const sA = a.sort_order, sB = b.sort_order;
+    if (sA != null && sB != null) return sA - sB;
+    if (sA != null) return -1;
+    if (sB != null) return 1;
     return new Date(b.created_at) - new Date(a.created_at);
   });
 
@@ -345,17 +377,59 @@ export default function TaskList({
           </div>
         )}
 
-        {sorted.map(task => (
-          <TaskRow
+        {sorted.map((task, idx) => (
+          <div
             key={task.id}
-            task={task}
-            agents={agents}
-            isSelected={task.id === selectedId}
-            onSelect={onTaskSelect}
-            onToggleComplete={onToggleComplete}
-            onToggleStar={onToggleStar}
-            onToggleMyDay={onToggleMyDay}
-          />
+            draggable={!!onReorder}
+            onDragStart={(e) => {
+              e.dataTransfer.effectAllowed = "move";
+              dragIdx.current = idx;
+              setTimeout(() => { e.target.style.opacity = "0.4"; }, 0);
+            }}
+            onDragEnd={(e) => {
+              dragIdx.current = null;
+              setDropIdx(null);
+              e.target.style.opacity = "1";
+            }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "move";
+              if (dragIdx.current !== null && dragIdx.current !== idx) setDropIdx(idx);
+            }}
+            onDragLeave={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget)) setDropIdx(null);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              const from = dragIdx.current;
+              if (from === null || from === idx) { setDropIdx(null); return; }
+              const reordered = [...sorted];
+              const [moved] = reordered.splice(from, 1);
+              reordered.splice(idx, 0, moved);
+              onReorder?.(reordered);
+              setDropIdx(null);
+            }}
+            style={{ position: "relative" }}
+          >
+            {/* Drop indicator line */}
+            {dropIdx === idx && dragIdx.current !== null && dragIdx.current !== idx && (
+              <div style={{
+                position: "absolute", top: 0, left: 24, right: 24,
+                height: 2, background: "#c9a96e", borderRadius: 1,
+                zIndex: 10, pointerEvents: "none",
+              }} />
+            )}
+            <TaskRow
+              task={task}
+              agents={agents}
+              isSelected={task.id === selectedId}
+              onSelect={onTaskSelect}
+              onToggleComplete={onToggleComplete}
+              onToggleStar={onToggleStar}
+              onToggleMyDay={onToggleMyDay}
+              showDragHandle={!!onReorder}
+            />
+          </div>
         ))}
 
         {/* Completed -- pill button */}

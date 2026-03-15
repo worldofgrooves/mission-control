@@ -214,8 +214,8 @@ export default function MCApp() {
       sb.from("mc_agents").select("*").order("display_name"),
       sb.from("mc_tasks")
         .select("*, mc_agents(id, name, display_name)")
-        .neq("status", "parked") // load parked lazily via view filter workaround
-        .order("position")
+        .neq("status", "parked")
+        .order("sort_order", { nullsFirst: false })
         .order("created_at", { ascending: false }),
     ]);
     if (ag.data) setAgents(ag.data);
@@ -229,7 +229,7 @@ export default function MCApp() {
       sb.from("mc_agents").select("*").order("display_name"),
       sb.from("mc_tasks")
         .select("*, mc_agents(id, name, display_name)")
-        .order("position")
+        .order("sort_order", { nullsFirst: false })
         .order("created_at", { ascending: false }),
     ]);
     if (ag.data) setAgents(ag.data);
@@ -325,6 +325,23 @@ export default function MCApp() {
   const toggleMyDay = useCallback(async (task) => {
     await updateTask(task.id, { flagged_today: !task.flagged_today });
   }, [updateTask]);
+
+  const reorderTasks = useCallback(async (reorderedList) => {
+    // Assign sort_order values with gaps (x10) to allow future insertions
+    const updates = reorderedList.map((task, idx) => ({
+      id: task.id,
+      sort_order: (idx + 1) * 10,
+    }));
+    // Optimistic update
+    const orderMap = Object.fromEntries(updates.map(u => [u.id, u.sort_order]));
+    setTasks(prev => prev.map(t =>
+      orderMap[t.id] !== undefined ? { ...t, sort_order: orderMap[t.id] } : t
+    ));
+    // Persist to Supabase
+    await Promise.all(updates.map(({ id, sort_order }) =>
+      sb.from("mc_tasks").update({ sort_order, updated_at: new Date().toISOString() }).eq("id", id)
+    ));
+  }, []);
 
   const quickCapture = useCallback(async (title) => {
     if (!title.trim()) return;
@@ -490,6 +507,7 @@ export default function MCApp() {
               onMenuOpen={() => setSidebarOpen(true)}
               onAgentProfile={handleAgentProfile}
               onStatusChange={(id, status) => updateTask(id, { status })}
+              onReorder={activeView.startsWith("agent:") ? reorderTasks : undefined}
             />
           </div>
         )}
