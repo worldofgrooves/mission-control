@@ -242,7 +242,7 @@ export default function TaskDetail({
   const priOptions    = PRIORITIES.map(p => ({ value: p, label: PRI_LABEL[p] }));
   const brandOptions  = [{ value: "", label: "No brand" }, ...BRANDS.map(b => ({ value: b, label: BRAND_LABEL[b] }))];
   const deptOptions   = [{ value: "", label: "No dept" }, ...DEPARTMENTS.map(d => ({ value: d, label: DEPT_LABEL[d] }))];
-  const agentOptions  = [{ value: "", label: "Unassigned" }, ...agents.map(a => ({ value: a.id, label: a.display_name }))];
+  const agentOptions  = [{ value: "", label: "Denver (me)" }, ...agents.map(a => ({ value: a.id, label: a.display_name }))];
 
   const fmtDate = (iso) => iso
     ? new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
@@ -458,6 +458,86 @@ export default function TaskDetail({
             }}
           />
         </FieldRow>
+
+        {/* Quick schedule pills -- set deadline_at or My Day flag in one click */}
+        <div style={{
+          padding: "8px 20px 12px",
+          borderBottom: "1px solid #1e1e1e",
+          display: "flex",
+          gap: 6,
+          flexWrap: "wrap",
+          alignItems: "center",
+        }}>
+          <span style={{ fontSize: 11, color: "#444", letterSpacing: 1, marginRight: 4, flexShrink: 0 }}>
+            SCHEDULE
+          </span>
+          {[
+            {
+              label: "Today",
+              color: "#f59e0b",
+              isActive: task.flagged_today,
+              action: () => onUpdate({ flagged_today: true, deadline_at: null }),
+            },
+            {
+              label: "This Week",
+              color: "#6366f1",
+              isActive: (() => {
+                if (!task.deadline_at || task.flagged_today) return false;
+                const d = new Date(task.deadline_at);
+                const now = new Date();
+                const end = new Date(now); end.setDate(now.getDate() + (7 - now.getDay())); end.setHours(23, 59, 59);
+                return d >= now && d <= end;
+              })(),
+              action: () => {
+                const end = new Date();
+                end.setDate(end.getDate() + (7 - end.getDay()));
+                end.setHours(23, 59, 59);
+                onUpdate({ deadline_at: end.toISOString(), flagged_today: false });
+              },
+            },
+            {
+              label: "This Month",
+              color: "#8b5cf6",
+              isActive: (() => {
+                if (!task.deadline_at || task.flagged_today) return false;
+                const d = new Date(task.deadline_at);
+                const now = new Date();
+                const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+                return d >= now && d <= end;
+              })(),
+              action: () => {
+                const end = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59);
+                onUpdate({ deadline_at: end.toISOString(), flagged_today: false });
+              },
+            },
+            {
+              label: "Clear",
+              color: "#555",
+              isActive: false,
+              action: () => onUpdate({ deadline_at: null, flagged_today: false }),
+            },
+          ].map(({ label, color, isActive, action }) => (
+            <button
+              key={label}
+              onClick={action}
+              style={{
+                padding: "4px 11px",
+                background: isActive ? `${color}22` : "#1a1a1a",
+                border: `1px solid ${isActive ? color : "#2a2a2a"}`,
+                borderRadius: 20,
+                color: isActive ? color : "#555",
+                fontSize: 12,
+                cursor: "pointer",
+                transition: "all 0.12s",
+                flexShrink: 0,
+              }}
+              onMouseEnter={(e) => { if (!isActive) { e.currentTarget.style.borderColor = "#444"; e.currentTarget.style.color = "#888"; } }}
+              onMouseLeave={(e) => { if (!isActive) { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "#555"; } }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
 
         {/* My Day toggle row */}
         <div

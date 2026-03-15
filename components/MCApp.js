@@ -470,6 +470,7 @@ export default function MCApp() {
               onTaskSelect={handleTaskSelect}
               onToggleComplete={toggleComplete}
               onToggleStar={toggleStar}
+              onToggleMyDay={toggleMyDay}
               onQuickCapture={quickCapture}
               onMenuOpen={() => setSidebarOpen(true)}
               onAgentProfile={handleAgentProfile}

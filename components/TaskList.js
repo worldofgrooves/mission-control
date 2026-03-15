@@ -5,11 +5,13 @@ import KanbanBoard from "./KanbanBoard";
 
 // ─── Task Card ────────────────────────────────────────────────────────────────
 
-function TaskRow({ task, agents, isSelected, onSelect, onToggleComplete, onToggleStar }) {
+function TaskRow({ task, agents, isSelected, onSelect, onToggleComplete, onToggleStar, onToggleMyDay }) {
   const isDone      = task.status === "done";
   const isImportant = task.priority === "immediate";
 
   const agent = task.mc_agents || agents.find(a => a.id === task.assignee_agent_id);
+  // Unassigned tasks belong to Denver -- show his name in the meta row
+  const assigneeLabel = agent ? (agent.display_name || agent.name) : (!task.assignee_agent_id ? "Denver" : null);
 
   const deadlineMeta = task.deadline_at ? (() => {
     const d    = new Date(task.deadline_at);
@@ -77,7 +79,7 @@ function TaskRow({ task, agents, isSelected, onSelect, onToggleComplete, onToggl
         </div>
 
         {/* Meta */}
-        {(showStatus || agent || deadlineMeta || (task.brand && task.brand !== "shared")) && (
+        {(showStatus || assigneeLabel || deadlineMeta || task.flagged_today || (task.brand && task.brand !== "shared")) && (
           <div style={{
             display: "flex",
             alignItems: "center",
@@ -97,10 +99,13 @@ function TaskRow({ task, agents, isSelected, onSelect, onToggleComplete, onToggl
                 {STATUS_LABEL[task.status]}
               </span>
             )}
-            {agent && (
+            {assigneeLabel && (
               <span style={{ fontSize: 12, color: "#666", flexShrink: 0 }}>
-                {agent.display_name || agent.name}
+                {assigneeLabel}
               </span>
+            )}
+            {task.flagged_today && !deadlineMeta && (
+              <span style={{ fontSize: 11, color: "#f59e0b", flexShrink: 0 }}>My Day</span>
             )}
             {deadlineMeta && (
               <span style={{ fontSize: 12, color: deadlineMeta.color, flexShrink: 0 }}>
@@ -121,6 +126,25 @@ function TaskRow({ task, agents, isSelected, onSelect, onToggleComplete, onToggl
           </div>
         )}
       </div>
+
+      {/* My Day sun -- lit when flagged_today */}
+      <button
+        onClick={(e) => { e.stopPropagation(); onToggleMyDay?.(task); }}
+        title={task.flagged_today ? "Remove from My Day" : "Add to My Day"}
+        style={{
+          background: "none",
+          border: "none",
+          color: task.flagged_today ? "#f59e0b" : "#2a2a2a",
+          cursor: "pointer",
+          fontSize: 17,
+          flexShrink: 0,
+          padding: "4px 2px",
+          transition: "color 0.12s",
+          lineHeight: 1,
+        }}
+      >
+        ☀
+      </button>
 
       {/* Star -- always visible: outline normally, filled when important */}
       <button
@@ -198,6 +222,7 @@ export default function TaskList({
   onTaskSelect,
   onToggleComplete,
   onToggleStar,
+  onToggleMyDay,
   onQuickCapture,
   onMenuOpen,
   onAgentProfile,
@@ -343,6 +368,7 @@ export default function TaskList({
             onSelect={onTaskSelect}
             onToggleComplete={onToggleComplete}
             onToggleStar={onToggleStar}
+            onToggleMyDay={onToggleMyDay}
           />
         ))}
 
@@ -387,6 +413,7 @@ export default function TaskList({
             onSelect={onTaskSelect}
             onToggleComplete={onToggleComplete}
             onToggleStar={onToggleStar}
+            onToggleMyDay={onToggleMyDay}
           />
         ))}
 
