@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useCallback } from "react";
+import { useMemo, useCallback, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { filterTasks, BRAND_LABEL } from "./MCApp";
 
@@ -28,8 +28,33 @@ const ARCHIVE_VIEWS = [
   { id: "done",   label: "Done" },
 ];
 
-export default function Sidebar({ tasks, agents, activeView, onViewChange, onClose, isMobile, onWakeAgent }) {
+export default function Sidebar({ tasks, agents, activeView, onViewChange, onClose, isMobile, onWakeAgent, folders, ideasCount, onAddFolder, onDeleteFolder }) {
   const router = useRouter();
+  const [ideasOpen, setIdeasOpen] = useState(
+    activeView === "ideas:all" || activeView.startsWith("ideas:folder:")
+  );
+  const [addingFolder, setAddingFolder] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
+  const folderSubmittedRef = useRef(false);
+
+  // Keep Ideas section open if an ideas view is active
+  const isIdeasActive = activeView === "ideas:all" || activeView.startsWith("ideas:folder:");
+
+  const submitFolder = () => {
+    if (folderSubmittedRef.current) return; // guard against double-fire
+    const name = newFolderName.trim();
+    if (!name) { setAddingFolder(false); return; }
+    folderSubmittedRef.current = true;
+    onAddFolder?.(name);
+    setNewFolderName("");
+    setAddingFolder(false);
+  };
+
+  const dismissFolder = () => {
+    // Blur: only dismiss, do NOT save (avoids double-call with Enter)
+    setAddingFolder(false);
+    setNewFolderName("");
+  };
 
   const handleSignOut = useCallback(async () => {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -304,6 +329,166 @@ export default function Sidebar({ tasks, agents, activeView, onViewChange, onClo
               </div>
             );
           })}
+        </div>
+
+        <div style={{ height: 1, background: "#161616", margin: "6px 8px 10px" }} />
+
+        {/* Ideas */}
+        <div style={{ marginBottom: 8 }}>
+          {/* Section header -- clickable to collapse */}
+          <button
+            onClick={() => setIdeasOpen(o => !o)}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              width: "100%",
+              padding: "0 12px 2px",
+              background: "none", border: "none",
+              cursor: "pointer",
+            }}
+          >
+            <span style={{
+              fontSize: 11, color: isIdeasActive ? "#c9a96e" : "#555",
+              letterSpacing: 1.5, fontWeight: 600, textTransform: "uppercase",
+            }}>
+              Ideas
+            </span>
+            <span style={{
+              fontSize: 10, color: "#333",
+              transform: ideasOpen ? "rotate(90deg)" : "rotate(0deg)",
+              transition: "transform 0.15s",
+              display: "inline-block",
+            }}>
+              ▶
+            </span>
+          </button>
+
+          {ideasOpen && (
+            <>
+              {/* All Ideas */}
+              {renderItem("ideas:all", "All Ideas", "💡")}
+
+              {/* Folders */}
+              {folders.map(folder => {
+                const id = `ideas:folder:${folder.id}`;
+                const isActive = activeView === id;
+                const count = ideasCount?.[folder.id] || 0;
+                return (
+                  <div
+                    key={id}
+                    className="folder-row"
+                    style={{ position: "relative", display: "flex", alignItems: "center" }}
+                  >
+                    <button
+                      onClick={() => onViewChange(id)}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 10,
+                        flex: 1, padding: "9px 4px 9px 14px",
+                        background: isActive ? "rgba(201,169,110,0.14)" : "transparent",
+                        border: "none", borderRadius: 8, cursor: "pointer",
+                        color: isActive ? "#c9a96e" : "#999",
+                        fontSize: 15, textAlign: "left",
+                        transition: "background 0.1s, color 0.1s",
+                        fontWeight: isActive ? 500 : 400,
+                      }}
+                    >
+                      <span style={{ width: 20, textAlign: "center", fontSize: 11, color: "#444", flexShrink: 0 }}>
+                        ▸
+                      </span>
+                      <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {folder.name}
+                      </span>
+                      {count > 0 && (
+                        <span style={{ fontSize: 13, color: isActive ? "#c9a96e" : "#555", flexShrink: 0, paddingRight: 4 }}>
+                          {count}
+                        </span>
+                      )}
+                    </button>
+                    {/* Delete folder button -- shown on hover */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const msg = count > 0
+                          ? `Delete "${folder.name}"? The ${count} idea${count > 1 ? "s" : ""} inside will be unfoldered.`
+                          : `Delete folder "${folder.name}"?`;
+                        if (confirm(msg)) {
+                          // If this folder is active, navigate away first
+                          if (isActive) onViewChange("ideas:all");
+                          onDeleteFolder?.(folder.id);
+                        }
+                      }}
+                      title="Delete folder"
+                      style={{
+                        background: "none", border: "none",
+                        color: "#2a2a2a", fontSize: 14,
+                        cursor: "pointer", padding: "6px 8px",
+                        flexShrink: 0, lineHeight: 1,
+                        borderRadius: 6,
+                        transition: "color 0.1s",
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.color = "#ef4444"}
+                      onMouseLeave={e => e.currentTarget.style.color = "#2a2a2a"}
+                    >
+                      ×
+                    </button>
+                  </div>
+                );
+              })}
+
+              {/* Add folder input */}
+              {addingFolder ? (
+                <div style={{ padding: "4px 12px", display: "flex", gap: 6 }}>
+                  <input
+                    autoFocus
+                    value={newFolderName}
+                    onChange={e => { setNewFolderName(e.target.value); folderSubmittedRef.current = false; }}
+                    onKeyDown={e => {
+                      if (e.key === "Enter") submitFolder();
+                      if (e.key === "Escape") dismissFolder();
+                    }}
+                    onBlur={dismissFolder}
+                    placeholder="Folder name..."
+                    style={{
+                      flex: 1,
+                      background: "#1a1a1a", border: "1px solid #333",
+                      borderRadius: 6, outline: "none",
+                      color: "#f0f0f0", fontSize: 14,
+                      padding: "7px 10px",
+                    }}
+                  />
+                  <button
+                    onMouseDown={e => { e.preventDefault(); submitFolder(); }} // mousedown fires before blur
+                    style={{
+                      background: "#c9a96e", border: "none",
+                      borderRadius: 6, color: "#000",
+                      fontSize: 13, fontWeight: 600,
+                      padding: "0 10px", cursor: "pointer",
+                      flexShrink: 0,
+                    }}
+                  >
+                    Add
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => { folderSubmittedRef.current = false; setAddingFolder(true); }}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 10,
+                    width: "100%", padding: "8px 12px",
+                    background: "none", border: "none",
+                    cursor: "pointer", color: "#333",
+                    fontSize: 13, textAlign: "left",
+                    transition: "color 0.1s",
+                    borderRadius: 8,
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.color = "#666"}
+                  onMouseLeave={e => e.currentTarget.style.color = "#333"}
+                >
+                  <span style={{ width: 20, textAlign: "center", flexShrink: 0 }}>+</span>
+                  New Folder
+                </button>
+              )}
+            </>
+          )}
         </div>
 
         <div style={{ height: 1, background: "#161616", margin: "6px 8px 10px" }} />

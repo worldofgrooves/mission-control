@@ -213,6 +213,7 @@ export default function TaskDetail({
   onToggleStar,
   onToggleMyDay,
   onAddComment,
+  onDelete,
 }) {
   const [commentText,  setCommentText]  = useState("");
   const [editingTitle, setEditingTitle] = useState(false);
@@ -325,6 +326,27 @@ export default function TaskDetail({
             >
               ☀
             </button>
+            {/* Delete task */}
+            {onDelete && (
+              <button
+                onClick={() => {
+                  if (confirm(`Delete "${task.title}"? This cannot be undone.`)) {
+                    onDelete(task.id);
+                  }
+                }}
+                title="Delete task"
+                style={{
+                  background: "none", border: "none",
+                  color: "#2a2a2a", cursor: "pointer",
+                  fontSize: 16, padding: "6px 8px", lineHeight: 1,
+                  transition: "color 0.1s",
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.color = "#ef4444"}
+                onMouseLeave={(e) => e.currentTarget.style.color = "#2a2a2a"}
+              >
+                🗑
+              </button>
+            )}
             <button
               onClick={onClose}
               style={{

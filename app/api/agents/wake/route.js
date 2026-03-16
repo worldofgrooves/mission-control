@@ -25,9 +25,20 @@ const CLAUDECLAW_TOKEN = process.env.DASHBOARD_TOKEN;
 
 export async function POST(request) {
   try {
-    const { agentName } = await request.json();
+    const { agentName, taskNumber } = await request.json();
     if (!agentName) {
       return NextResponse.json({ error: "agentName required" }, { status: 400 });
+    }
+
+    // If a specific task was requested, fetch it for the targeted message
+    let targetTask = null;
+    if (taskNumber) {
+      const { data: td } = await sb
+        .from("mc_tasks")
+        .select("task_number, title, description, status, priority")
+        .eq("task_number", taskNumber)
+        .single();
+      targetTask = td || null;
     }
 
     // Look up agent display name for the response
@@ -72,7 +83,9 @@ export async function POST(request) {
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({
                     chat_id: agent.telegram_chat_id,
-                    text: `⚡ Wake signal sent to ${agent.display_name} via Mission Control. Task will fire within 60 seconds.`,
+                    text: targetTask
+                      ? `▶ Wake signal sent to ${agent.display_name} for Task #${targetTask.task_number}: ${targetTask.title}`
+                      : `⚡ Wake signal sent to ${agent.display_name} via Mission Control. Task will fire within 60 seconds.`,
                   }),
                 }
               ).catch(() => {}); // Best-effort notification
@@ -111,7 +124,9 @@ export async function POST(request) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           chat_id: agent.telegram_chat_id,
-          text: `⚡ Wake signal from Mission Control. Check your MC task queue for assigned tasks, run your Session Boot queries, and begin working on your next task.`,
+          text: targetTask
+            ? `▶ Denver wants you to start on this now:\n\nTask #${targetTask.task_number}: ${targetTask.title}${targetTask.description ? `\n\n${targetTask.description}` : ""}\n\nMark it in_progress and get to work. Report back when done.`
+            : `⚡ Wake signal from Mission Control. Check your MC task queue for assigned tasks, run your Session Boot queries, and begin working on your next task.`,
         }),
       }
     );

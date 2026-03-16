@@ -1,11 +1,11 @@
 "use client";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { PRI_COLOR, PRI_ORDER, STATUS_COLOR, STATUS_LABEL, BRAND_LABEL } from "./MCApp";
 import KanbanBoard from "./KanbanBoard";
 
 // ─── Task Card ────────────────────────────────────────────────────────────────
 
-function TaskRow({ task, agents, isSelected, onSelect, onToggleComplete, onToggleStar, onToggleMyDay, showDragHandle }) {
+function TaskRow({ task, agents, isSelected, onSelect, onToggleComplete, onToggleStar, onToggleMyDay, onWakeTask }) {
   const isDone      = task.status === "done";
   const isImportant = task.priority === "immediate";
 
@@ -33,7 +33,7 @@ function TaskRow({ task, agents, isSelected, onSelect, onToggleComplete, onToggl
         display: "flex",
         alignItems: "center",
         gap: 12,
-        padding: showDragHandle ? "14px 14px 14px 10px" : "14px 14px",
+        padding: "14px 14px",
         background: isSelected ? "#2a2a2a" : "#1c1c1c",
         cursor: "pointer",
         borderRadius: 10,
@@ -42,25 +42,6 @@ function TaskRow({ task, agents, isSelected, onSelect, onToggleComplete, onToggl
         transition: "background 0.1s",
       }}
     >
-      {/* Drag handle -- only shown when reordering is active */}
-      {showDragHandle && (
-        <div
-          style={{
-            color: "#282828",
-            fontSize: 15,
-            cursor: "grab",
-            flexShrink: 0,
-            lineHeight: 1,
-            userSelect: "none",
-            padding: "0 1px",
-          }}
-          onMouseEnter={e => e.currentTarget.style.color = "#555"}
-          onMouseLeave={e => e.currentTarget.style.color = "#282828"}
-        >
-          ⠿
-        </div>
-      )}
-
       {/* Complete circle */}
       <button
         onClick={(e) => { e.stopPropagation(); onToggleComplete(task); }}
@@ -89,9 +70,10 @@ function TaskRow({ task, agents, isSelected, onSelect, onToggleComplete, onToggl
           fontSize: 16,
           color: isDone ? "#444" : "#f0f0f0",
           textDecoration: isDone ? "line-through" : "none",
-          whiteSpace: "nowrap",
+          display: "-webkit-box",
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: "vertical",
           overflow: "hidden",
-          textOverflow: "ellipsis",
           lineHeight: 1.4,
         }}>
           {task.title}
@@ -161,9 +143,34 @@ function TaskRow({ task, agents, isSelected, onSelect, onToggleComplete, onToggl
           transition: "color 0.12s",
           lineHeight: 1,
         }}
+        onMouseEnter={e => { if (!task.flagged_today) e.currentTarget.style.color = "#f59e0b"; }}
+        onMouseLeave={e => { if (!task.flagged_today) e.currentTarget.style.color = "#2a2a2a"; }}
       >
         ☀
       </button>
+
+      {/* Play button -- only on tasks assigned to an agent, not done */}
+      {onWakeTask && task.assignee_agent_id && !isDone && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onWakeTask(task); }}
+          title="Send to agent now"
+          style={{
+            background: "none",
+            border: "none",
+            color: "#2a2a2a",
+            cursor: "pointer",
+            fontSize: 13,
+            flexShrink: 0,
+            padding: "4px 3px",
+            transition: "color 0.12s",
+            lineHeight: 1,
+          }}
+          onMouseEnter={e => e.currentTarget.style.color = "#10b981"}
+          onMouseLeave={e => e.currentTarget.style.color = "#2a2a2a"}
+        >
+          ▶
+        </button>
+      )}
 
       {/* Star -- always visible: outline normally, filled when important */}
       <button
@@ -179,6 +186,8 @@ function TaskRow({ task, agents, isSelected, onSelect, onToggleComplete, onToggl
           transition: "color 0.12s",
           lineHeight: 1,
         }}
+        onMouseEnter={e => { if (!isImportant) e.currentTarget.style.color = "#c9a96e"; }}
+        onMouseLeave={e => { if (!isImportant) e.currentTarget.style.color = "#3a3a3a"; }}
       >
         {isImportant ? "★" : "☆"}
       </button>
@@ -186,7 +195,32 @@ function TaskRow({ task, agents, isSelected, onSelect, onToggleComplete, onToggl
   );
 }
 
-// ─── Task List ────────────────────────────────────────────────────────────────
+// ─── Drag Handle ──────────────────────────────────────────────────────────────
+
+function DragHandle({ onPointerDown }) {
+  return (
+    <div
+      onPointerDown={onPointerDown}
+      style={{
+        color: "#333",
+        fontSize: 16,
+        cursor: "grab",
+        flexShrink: 0,
+        lineHeight: 1,
+        userSelect: "none",
+        touchAction: "none",      // critical: tells browser not to scroll on this element
+        padding: "0 6px 0 10px",
+        display: "flex",
+        alignItems: "center",
+        alignSelf: "stretch",
+      }}
+      onMouseEnter={e => e.currentTarget.style.color = "#666"}
+      onMouseLeave={e => e.currentTarget.style.color = "#333"}
+    >
+      ⠿
+    </div>
+  );
+}
 
 // ─── View toggle (list / board) ───────────────────────────────────────────────
 
@@ -230,6 +264,8 @@ function ViewToggle({ viewMode, onChange }) {
   );
 }
 
+// ─── Task List ────────────────────────────────────────────────────────────────
+
 export default function TaskList({
   tasks,
   completedTasks = [],
@@ -247,13 +283,24 @@ export default function TaskList({
   onAgentProfile,
   onStatusChange,
   onReorder,
+  onWakeTask,
 }) {
   const [captureText, setCaptureText] = useState("");
   const [showDone, setShowDone]       = useState(false);
   const [viewMode,  setViewMode]      = useState("list");
   const [dropIdx,   setDropIdx]       = useState(null);
-  const dragIdx = useRef(null);
+
+  // Drag state refs (not state -- we don't want re-renders on every drag event)
+  const dragFromIdx  = useRef(null);   // index being dragged
+  const dropIdxRef   = useRef(null);   // current drop target (mirrors state for use in listeners)
+  const itemRefs     = useRef([]);     // DOM refs for each draggable row wrapper
+  const sortedRef    = useRef([]);     // current sorted list (for use in event listeners)
+  const isDragging   = useRef(false);  // true during an active pointer drag
+
   const inputRef = useRef(null);
+
+  // Keep dropIdxRef in sync with state
+  useEffect(() => { dropIdxRef.current = dropIdx; }, [dropIdx]);
 
   // Collapse completed section whenever the view changes
   useEffect(() => { setShowDone(false); }, [activeView]);
@@ -282,6 +329,80 @@ export default function TaskList({
     if (sB != null) return 1;
     return new Date(b.created_at) - new Date(a.created_at);
   });
+
+  // Keep sortedRef up to date
+  useEffect(() => { sortedRef.current = sorted; });
+
+  // ── Unified pointer drag (works for both mouse and touch) ──────────────────
+  // We use Pointer Events API: pointerdown on drag handle, pointermove/up on document.
+  // Pointer events are the modern unified API (mouse + touch + stylus).
+  // Using { passive: false } on pointermove lets us call preventDefault() to block scroll.
+
+  const commitDrag = useCallback(() => {
+    const from = dragFromIdx.current;
+    const to   = dropIdxRef.current;
+
+    // Reset visual state on the dragged item
+    if (itemRefs.current[from]) {
+      itemRefs.current[from].style.opacity = "1";
+      itemRefs.current[from].style.transform = "";
+    }
+
+    dragFromIdx.current = null;
+    isDragging.current  = false;
+    setDropIdx(null);
+
+    if (to !== null && to !== from) {
+      const reordered = [...sortedRef.current];
+      const [moved] = reordered.splice(from, 1);
+      reordered.splice(to, 0, moved);
+      onReorder?.(reordered);
+    }
+  }, [onReorder]);
+
+  useEffect(() => {
+    if (!onReorder) return;
+
+    const onPointerMove = (e) => {
+      if (dragFromIdx.current === null) return;
+      e.preventDefault(); // blocks scroll during drag -- only works with passive: false
+
+      isDragging.current = true;
+
+      // Dim the dragging row
+      if (itemRefs.current[dragFromIdx.current]) {
+        itemRefs.current[dragFromIdx.current].style.opacity = "0.4";
+      }
+
+      // Find which row the pointer is over
+      const y = e.clientY;
+      let target = null;
+      itemRefs.current.forEach((ref, i) => {
+        if (!ref || i === dragFromIdx.current) return;
+        const rect = ref.getBoundingClientRect();
+        if (y >= rect.top && y < rect.bottom) target = i;
+      });
+
+      if (target !== null && target !== dropIdxRef.current) {
+        setDropIdx(target);
+      }
+    };
+
+    const onPointerUp = () => {
+      if (dragFromIdx.current === null) return;
+      commitDrag();
+    };
+
+    document.addEventListener("pointermove", onPointerMove, { passive: false });
+    document.addEventListener("pointerup",   onPointerUp);
+    document.addEventListener("pointercancel", onPointerUp);
+
+    return () => {
+      document.removeEventListener("pointermove", onPointerMove);
+      document.removeEventListener("pointerup",   onPointerUp);
+      document.removeEventListener("pointercancel", onPointerUp);
+    };
+  }, [onReorder, commitDrag]);
 
   const handleCapture = (e) => {
     if (e.key === "Enter" && captureText.trim()) {
@@ -377,60 +498,66 @@ export default function TaskList({
           </div>
         )}
 
-        {sorted.map((task, idx) => (
-          <div
-            key={task.id}
-            draggable={!!onReorder}
-            onDragStart={(e) => {
-              e.dataTransfer.effectAllowed = "move";
-              dragIdx.current = idx;
-              setTimeout(() => { e.target.style.opacity = "0.4"; }, 0);
-            }}
-            onDragEnd={(e) => {
-              dragIdx.current = null;
-              setDropIdx(null);
-              e.target.style.opacity = "1";
-            }}
-            onDragOver={(e) => {
-              e.preventDefault();
-              e.dataTransfer.dropEffect = "move";
-              if (dragIdx.current !== null && dragIdx.current !== idx) setDropIdx(idx);
-            }}
-            onDragLeave={(e) => {
-              if (!e.currentTarget.contains(e.relatedTarget)) setDropIdx(null);
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              const from = dragIdx.current;
-              if (from === null || from === idx) { setDropIdx(null); return; }
-              const reordered = [...sorted];
-              const [moved] = reordered.splice(from, 1);
-              reordered.splice(idx, 0, moved);
-              onReorder?.(reordered);
-              setDropIdx(null);
-            }}
-            style={{ position: "relative" }}
-          >
-            {/* Drop indicator line */}
-            {dropIdx === idx && dragIdx.current !== null && dragIdx.current !== idx && (
-              <div style={{
-                position: "absolute", top: 0, left: 24, right: 24,
-                height: 2, background: "#c9a96e", borderRadius: 1,
-                zIndex: 10, pointerEvents: "none",
-              }} />
-            )}
-            <TaskRow
-              task={task}
-              agents={agents}
-              isSelected={task.id === selectedId}
-              onSelect={onTaskSelect}
-              onToggleComplete={onToggleComplete}
-              onToggleStar={onToggleStar}
-              onToggleMyDay={onToggleMyDay}
-              showDragHandle={!!onReorder}
-            />
-          </div>
-        ))}
+        {sorted.map((task, idx) => {
+          const isBeingDragged = false; // managed via direct DOM opacity in listener
+          const showDropLine   = dropIdx === idx && dragFromIdx.current !== null && dragFromIdx.current !== idx;
+
+          return (
+            <div
+              key={task.id}
+              ref={el => { itemRefs.current[idx] = el; }}
+              style={{
+                position: "relative",
+                display: "flex",
+                alignItems: "stretch",
+              }}
+            >
+              {/* Drop indicator line above this row */}
+              {showDropLine && (
+                <div style={{
+                  position: "absolute",
+                  top: 0, left: 24, right: 24,
+                  height: 2,
+                  background: "#c9a96e",
+                  borderRadius: 1,
+                  zIndex: 10,
+                  pointerEvents: "none",
+                }} />
+              )}
+
+              {/* Drag handle -- only in reorderable views */}
+              {onReorder && (
+                <DragHandle
+                  onPointerDown={(e) => {
+                    // Only respond to primary pointer (left mouse or first touch)
+                    if (e.button !== undefined && e.button !== 0) return;
+                    e.currentTarget.setPointerCapture(e.pointerId);
+                    dragFromIdx.current = idx;
+                    isDragging.current  = false;
+                  }}
+                />
+              )}
+
+              {/* Task row -- absorbs the rest of the width */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <TaskRow
+                  task={task}
+                  agents={agents}
+                  isSelected={task.id === selectedId}
+                  onSelect={(t) => {
+                    // Suppress tap-select if we just finished a drag
+                    if (isDragging.current) { isDragging.current = false; return; }
+                    onTaskSelect(t);
+                  }}
+                  onToggleComplete={onToggleComplete}
+                  onToggleStar={onToggleStar}
+                  onToggleMyDay={onToggleMyDay}
+                  onWakeTask={onWakeTask}
+                />
+              </div>
+            </div>
+          );
+        })}
 
         {/* Completed -- pill button */}
         {doneTasks.length > 0 && (

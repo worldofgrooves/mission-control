@@ -6,6 +6,7 @@ import TaskList from "./TaskList";
 import TaskDetail from "./TaskDetail";
 import AgentProfile from "./AgentProfile";
 import LiveFeed from "./LiveFeed";
+import IdeasPanel from "./IdeasPanel";
 
 const sb = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -197,6 +198,10 @@ export default function MCApp() {
   const [isDesktop,      setIsDesktop]     = useState(false);
   const [profileAgentId, setProfileAgentId] = useState(null);
 
+  // ── Ideas state ──
+  const [ideas,   setIdeas]   = useState([]);
+  const [folders, setFolders] = useState([]);
+
   // ── Responsive ──
   useEffect(() => {
     const check = () => {
@@ -225,15 +230,19 @@ export default function MCApp() {
 
   // Load all tasks (including parked) once on mount
   const loadAll = useCallback(async () => {
-    const [ag, tk] = await Promise.all([
+    const [ag, tk, fo, id] = await Promise.all([
       sb.from("mc_agents").select("*").order("display_name"),
       sb.from("mc_tasks")
         .select("*, mc_agents(id, name, display_name)")
         .order("sort_order", { nullsFirst: false })
         .order("created_at", { ascending: false }),
+      sb.from("mc_idea_folders").select("*").order("sort_order"),
+      sb.from("mc_ideas").select("*").order("created_at", { ascending: false }),
     ]);
     if (ag.data) setAgents(ag.data);
     if (tk.data) setTasks(tk.data);
+    if (fo.data) setFolders(fo.data);
+    if (id.data) setIdeas(id.data);
     setLoading(false);
   }, []);
 
@@ -343,6 +352,85 @@ export default function MCApp() {
     ));
   }, []);
 
+  // ── Ideas mutations ──
+  const addIdea = useCallback(async (title, folderId) => {
+    const fields = {
+      title,
+      folder_id: folderId || null,
+      source: "denver",
+    };
+    const { data, error } = await sb.from("mc_ideas").insert(fields).select().single();
+    if (error) { console.error("addIdea failed:", error.message); return; }
+    if (data) setIdeas(prev => [data, ...prev]);
+  }, []);
+
+  const updateIdea = useCallback(async (id, fields) => {
+    setIdeas(prev => prev.map(i => i.id === id ? { ...i, ...fields } : i));
+    await sb.from("mc_ideas").update({ ...fields, updated_at: new Date().toISOString() }).eq("id", id);
+  }, []);
+
+  const deleteIdea = useCallback(async (id) => {
+    setIdeas(prev => prev.filter(i => i.id !== id));
+    setSelectedId(null);
+    await sb.from("mc_ideas").delete().eq("id", id);
+  }, []);
+
+  const promoteIdea = useCallback(async (idea) => {
+    // Create a task from this idea
+    const fields = {
+      title:       idea.title,
+      description: idea.body || "",
+      status:      "inbox",
+      priority:    "when_capacity",
+      created_by:  "denver",
+    };
+    const { data: taskData, error } = await sb.from("mc_tasks")
+      .insert(fields)
+      .select("*, mc_agents(id, name, display_name)")
+      .single();
+    if (error) { console.error("promoteIdea failed:", error.message); return; }
+    if (taskData) {
+      setTasks(prev => [taskData, ...prev]);
+      // Mark idea as promoted
+      await updateIdea(idea.id, { promoted_to_task_id: taskData.id });
+      // Navigate to the new task
+      setSelectedId(taskData.id);
+      setActiveView("all");
+    }
+  }, [updateIdea]);
+
+  const addFolder = useCallback(async (name) => {
+    const maxSort = folders.reduce((m, f) => Math.max(m, f.sort_order || 0), 0);
+    const { data, error } = await sb.from("mc_idea_folders")
+      .insert({ name, sort_order: maxSort + 10 })
+      .select().single();
+    if (error) { console.error("addFolder failed:", error.message); return; }
+    if (data) setFolders(prev => [...prev, data]);
+  }, [folders]);
+
+  const deleteFolder = useCallback(async (folderId) => {
+    // Unfolder ideas (set folder_id null) -- they move to "All Ideas" unfoldered
+    await sb.from("mc_ideas").update({ folder_id: null }).eq("folder_id", folderId);
+    setIdeas(prev => prev.map(i => i.folder_id === folderId ? { ...i, folder_id: null } : i));
+    setFolders(prev => prev.filter(f => f.id !== folderId));
+    await sb.from("mc_idea_folders").delete().eq("id", folderId);
+  }, []);
+
+  const deleteTask = useCallback(async (taskId) => {
+    setTasks(prev => prev.filter(t => t.id !== taskId));
+    setSelectedId(null);
+    await sb.from("mc_tasks").delete().eq("id", taskId);
+  }, []);
+
+  // ── Ideas derived state ──
+  const ideasCount = useMemo(() => {
+    const counts = {};
+    for (const idea of ideas) {
+      if (idea.folder_id) counts[idea.folder_id] = (counts[idea.folder_id] || 0) + 1;
+    }
+    return counts;
+  }, [ideas]);
+
   const quickCapture = useCallback(async (title) => {
     if (!title.trim()) return;
     const fields = {
@@ -374,6 +462,17 @@ export default function MCApp() {
     if (data)  setTasks(prev => [data, ...prev]);
   }, [activeView]);
 
+  const wakeTask = useCallback(async (task) => {
+    // Find the agent assigned to this task
+    const agent = task.mc_agents || agents.find(a => a.id === task.assignee_agent_id);
+    if (!agent) return;
+    await fetch("/api/agents/wake", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ agentName: agent.name, taskNumber: task.task_number }),
+    });
+  }, [agents]);
+
   const addComment = useCallback(async (taskId, body) => {
     if (!body.trim()) return;
     const { data } = await sb.from("mc_task_comments").insert({
@@ -392,6 +491,8 @@ export default function MCApp() {
   }, []);
 
   // ── Navigation ──
+  const isIdeasView = activeView === "ideas:all" || activeView.startsWith("ideas:folder:");
+
   const handleViewChange = useCallback((view) => {
     setActiveView(view);
     setSelectedId(null);
@@ -468,6 +569,10 @@ export default function MCApp() {
           onViewChange={handleViewChange}
           onClose={() => setSidebarOpen(false)}
           isMobile={isMobile}
+          folders={folders}
+          ideasCount={ideasCount}
+          onAddFolder={addFolder}
+          onDeleteFolder={deleteFolder}
           onWakeAgent={async (agentName) => {
             await fetch("/api/agents/wake", {
               method: "POST",
@@ -480,72 +585,94 @@ export default function MCApp() {
 
       {/* Content area */}
       <div style={{ flex: 1, display: "flex", overflow: "hidden", minWidth: 0, position: "relative" }}>
-        {/* Task list -- hidden on mobile when detail is open */}
-        {(!isMobile || !showDetail) && (
-          <div style={{
-            flex:     showDetail && !isMobile ? "0 0 auto" : 1,
-            width:    showDetail && !isMobile
-              ? `calc(100% - 400px${isDesktop ? " - 280px" : ""})`
-              : "100%",
-            minWidth: 0,
-            display:  "flex",
-            flexDirection: "column",
-          }}>
-            <TaskList
-              tasks={viewTasks}
-              completedTasks={agentCompletedTasks}
-              viewTitle={viewTitle}
-              activeView={activeView}
-              agents={agents}
-              selectedId={selectedId}
-              isMobile={isMobile}
-              onTaskSelect={handleTaskSelect}
-              onToggleComplete={toggleComplete}
-              onToggleStar={toggleStar}
-              onToggleMyDay={toggleMyDay}
-              onQuickCapture={quickCapture}
-              onMenuOpen={() => setSidebarOpen(true)}
-              onAgentProfile={handleAgentProfile}
-              onStatusChange={(id, status) => updateTask(id, { status })}
-              onReorder={activeView.startsWith("agent:") ? reorderTasks : undefined}
-            />
-          </div>
-        )}
 
-        {/* Task detail */}
-        {showDetail && (
-          <div style={{
-            width:       isMobile ? "100%" : 400,
-            flexShrink:  0,
-            borderLeft:  isMobile ? "none" : "1px solid #1a1a1a",
-            overflow:    "hidden",
-            display:     "flex",
-            flexDirection: "column",
-          }}>
-            <TaskDetail
-              task={selectedTask}
-              agents={agents}
-              comments={detailData?.comments || []}
-              deliverables={detailData?.deliverables || []}
-              loading={detailLoading}
-              isMobile={isMobile}
-              onClose={() => setSelectedId(null)}
-              onUpdate={(fields) => updateTask(selectedTask.id, fields)}
-              onToggleComplete={() => toggleComplete(selectedTask)}
-              onToggleStar={() => toggleStar(selectedTask)}
-              onToggleMyDay={() => toggleMyDay(selectedTask)}
-              onAddComment={(body) => addComment(selectedTask.id, body)}
-            />
-          </div>
-        )}
-
-        {/* Live Feed -- desktop right rail (>= 1280px) */}
-        {isDesktop && (
-          <LiveFeed
-            agents={agents}
-            onTaskSelect={handleTaskSelect}
-            onAgentProfile={handleAgentProfile}
+        {/* ── Ideas view ── */}
+        {isIdeasView ? (
+          <IdeasPanel
+            ideas={ideas}
+            folders={folders}
+            activeView={activeView}
+            selectedId={selectedId}
+            isMobile={isMobile}
+            onIdeaSelect={(idea) => setSelectedId(idea ? idea.id : null)}
+            onAddIdea={addIdea}
+            onUpdateIdea={updateIdea}
+            onDeleteIdea={deleteIdea}
+            onPromoteIdea={promoteIdea}
+            onAddFolder={addFolder}
           />
+        ) : (
+          <>
+            {/* Task list -- hidden on mobile when detail is open */}
+            {(!isMobile || !showDetail) && (
+              <div style={{
+                flex:     showDetail && !isMobile ? "0 0 auto" : 1,
+                width:    showDetail && !isMobile
+                  ? `calc(100% - 400px${isDesktop ? " - 280px" : ""})`
+                  : "100%",
+                minWidth: 0,
+                display:  "flex",
+                flexDirection: "column",
+              }}>
+                <TaskList
+                  tasks={viewTasks}
+                  completedTasks={agentCompletedTasks}
+                  viewTitle={viewTitle}
+                  activeView={activeView}
+                  agents={agents}
+                  selectedId={selectedId}
+                  isMobile={isMobile}
+                  onTaskSelect={handleTaskSelect}
+                  onToggleComplete={toggleComplete}
+                  onToggleStar={toggleStar}
+                  onToggleMyDay={toggleMyDay}
+                  onQuickCapture={quickCapture}
+                  onMenuOpen={() => setSidebarOpen(true)}
+                  onAgentProfile={handleAgentProfile}
+                  onStatusChange={(id, status) => updateTask(id, { status })}
+                  onReorder={activeView.startsWith("agent:") ? reorderTasks : undefined}
+                  onWakeTask={wakeTask}
+                />
+              </div>
+            )}
+
+            {/* Task detail */}
+            {showDetail && (
+              <div style={{
+                width:       isMobile ? "100%" : 400,
+                flexShrink:  0,
+                borderLeft:  isMobile ? "none" : "1px solid #1a1a1a",
+                overflow:    "hidden",
+                display:     "flex",
+                flexDirection: "column",
+              }}>
+                <TaskDetail
+                  task={selectedTask}
+                  agents={agents}
+                  comments={detailData?.comments || []}
+                  deliverables={detailData?.deliverables || []}
+                  loading={detailLoading}
+                  isMobile={isMobile}
+                  onClose={() => setSelectedId(null)}
+                  onUpdate={(fields) => updateTask(selectedTask.id, fields)}
+                  onToggleComplete={() => toggleComplete(selectedTask)}
+                  onToggleStar={() => toggleStar(selectedTask)}
+                  onToggleMyDay={() => toggleMyDay(selectedTask)}
+                  onAddComment={(body) => addComment(selectedTask.id, body)}
+                  onDelete={deleteTask}
+                />
+              </div>
+            )}
+
+            {/* Live Feed -- desktop right rail (>= 1280px) */}
+            {isDesktop && (
+              <LiveFeed
+                agents={agents}
+                onTaskSelect={handleTaskSelect}
+                onAgentProfile={handleAgentProfile}
+              />
+            )}
+          </>
         )}
       </div>
 
