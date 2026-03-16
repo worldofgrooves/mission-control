@@ -1,6 +1,10 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+
+const LS_TOKEN_KEY  = 'mc_session_token';
+const LS_EXPIRY_KEY = 'mc_session_expiry';
+const SESSION_TTL   = 365 * 24 * 60 * 60 * 1000; // 1 year in ms
 
 export default function LoginPage() {
   const [step, setStep]       = useState("email"); // "email" | "code"
@@ -8,7 +12,38 @@ export default function LoginPage() {
   const [code, setCode]       = useState("");
   const [error, setError]     = useState("");
   const [loading, setLoading] = useState(false);
+  const [restoring, setRestoring] = useState(true); // hide form while auto-restore runs
   const router = useRouter();
+
+  // On mount: check localStorage for a saved session and silently restore it.
+  // This handles macOS/iOS web apps where httpOnly cookies don't persist between launches.
+  useEffect(() => {
+    const token  = localStorage.getItem(LS_TOKEN_KEY);
+    const expiry = localStorage.getItem(LS_EXPIRY_KEY);
+
+    if (!token || !expiry || Date.now() > parseInt(expiry, 10)) {
+      // No valid saved session -- show the login form
+      setRestoring(false);
+      return;
+    }
+
+    fetch('/api/auth/restore-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.ok) {
+          router.replace('/');
+        } else {
+          localStorage.removeItem(LS_TOKEN_KEY);
+          localStorage.removeItem(LS_EXPIRY_KEY);
+          setRestoring(false);
+        }
+      })
+      .catch(() => setRestoring(false));
+  }, [router]);
 
   const handleRequestCode = async (e) => {
     e.preventDefault();
@@ -51,7 +86,13 @@ export default function LoginPage() {
         body: JSON.stringify({ code: code.trim() }),
       });
 
+      const body = await res.json().catch(() => ({}));
       if (res.ok) {
+        // Save session to localStorage so web app can restore it on next launch
+        if (body.token) {
+          localStorage.setItem(LS_TOKEN_KEY,  body.token);
+          localStorage.setItem(LS_EXPIRY_KEY, String(Date.now() + SESSION_TTL));
+        }
         router.push("/");
         router.refresh();
       } else {
@@ -95,6 +136,11 @@ export default function LoginPage() {
     transition: "all 0.15s",
     letterSpacing: 0.5,
   };
+
+  // Show blank screen while auto-restore is in progress -- avoids login flash
+  if (restoring) {
+    return <div style={{ minHeight: "100vh", background: "#000" }} />;
+  }
 
   return (
     <div style={{

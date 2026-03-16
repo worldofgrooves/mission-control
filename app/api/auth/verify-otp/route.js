@@ -35,7 +35,8 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Server misconfiguration' }, { status: 500 })
     }
 
-    const response = NextResponse.json({ ok: true })
+    // Return token in body so client can save to localStorage for web app session persistence
+    const response = NextResponse.json({ ok: true, token: sessionSecret })
     response.cookies.set('mc_session', sessionSecret, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
