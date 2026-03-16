@@ -335,11 +335,15 @@ export default function IdeasPanel({
   const selectedIdea = ideas.find(i => i.id === selectedId) || null;
   const showDetail = !!selectedIdea;
 
+  const submitCapture = () => {
+    if (!captureText.trim()) return;
+    onAddIdea(captureText.trim(), activeFolderId);
+    setCaptureText("");
+    inputRef.current?.focus();
+  };
+
   const handleCapture = (e) => {
-    if (e.key === "Enter" && captureText.trim()) {
-      onAddIdea(captureText.trim(), activeFolderId);
-      setCaptureText("");
-    }
+    if (e.key === "Enter") submitCapture();
     if (e.key === "Escape") {
       setCaptureText("");
       inputRef.current?.blur();
@@ -448,7 +452,18 @@ export default function IdeasPanel({
                 }}
               />
               {captureText && (
-                <span style={{ fontSize: 12, color: "#555", flexShrink: 0 }}>↵</span>
+                <button
+                  onMouseDown={e => { e.preventDefault(); submitCapture(); }}
+                  onTouchStart={e => { e.preventDefault(); submitCapture(); }}
+                  style={{
+                    background: "none", border: "none",
+                    color: "#c9a96e", fontSize: 22,
+                    cursor: "pointer", flexShrink: 0,
+                    padding: "0 2px", lineHeight: 1,
+                  }}
+                >
+                  ↵
+                </button>
               )}
             </div>
           </div>

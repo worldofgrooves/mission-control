@@ -456,7 +456,8 @@ export default function Sidebar({ tasks, agents, activeView, onViewChange, onClo
                     }}
                   />
                   <button
-                    onMouseDown={e => { e.preventDefault(); submitFolder(); }} // mousedown fires before blur
+                    onTouchStart={e => { e.preventDefault(); submitFolder(); }}
+                    onMouseDown={e => { e.preventDefault(); submitFolder(); }} // mousedown fires before blur on desktop
                     style={{
                       background: "#c9a96e", border: "none",
                       borderRadius: 6, color: "#000",
