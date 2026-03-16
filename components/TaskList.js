@@ -159,7 +159,7 @@ function TaskRow({ task, agents, isSelected, onSelect, onToggleComplete, onToggl
             border: "none",
             color: "#2a2a2a",
             cursor: "pointer",
-            fontSize: 13,
+            fontSize: 18,
             flexShrink: 0,
             padding: "4px 3px",
             transition: "color 0.12s",
