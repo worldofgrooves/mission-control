@@ -1042,23 +1042,6 @@ export default function MissionControl() {
 
         <div style={{ flex: 1 }} />
 
-        {!isMobile && (
-          <>
-            {[
-              { l: "ACTIVE",  v: stats.active,  c: C.cyan      },
-              { l: "BLOCKED", v: stats.blocked, c: "#ef4444"   },
-              { l: "WAITING", v: stats.waiting, c: "#a855f7"   },
-              { l: "DONE",    v: stats.done,    c: "#10b981"   },
-            ].map(s => (
-              <div key={s.l} style={{ display: "flex", alignItems: "center", gap: 5, padding: "3px 10px", background: "rgba(255,255,255,.02)", borderRadius: 4, border: `1px solid ${C.dim}` }}>
-                <span style={{ fontSize: 15, fontWeight: 700, color: s.c }}>{s.v}</span>
-                <span style={{ fontSize: 7, color: C.ghost, letterSpacing: 1 }}>{s.l}</span>
-              </div>
-            ))}
-            <div style={{ width: 1, height: 16, background: C.border }} />
-          </>
-        )}
-
         {isMobile && (
           <div style={{ display: "flex", gap: 8 }}>
             <span style={{ fontSize: 10, color: C.cyan, fontWeight: 700 }}>{stats.active}</span>
@@ -1108,6 +1091,23 @@ export default function MissionControl() {
               </button>
             ))}
           </div>
+        )}
+
+        {!isMobile && (
+          <>
+            <div style={{ width: 1, height: 16, background: C.border }} />
+            {[
+              { l: "ACTIVE",  v: stats.active,  c: C.cyan      },
+              { l: "BLOCKED", v: stats.blocked, c: "#ef4444"   },
+              { l: "WAITING", v: stats.waiting, c: "#a855f7"   },
+              { l: "DONE",    v: stats.done,    c: "#10b981"   },
+            ].map(s => (
+              <div key={s.l} style={{ display: "flex", alignItems: "center", gap: 5, padding: "3px 10px", background: "rgba(255,255,255,.02)", borderRadius: 4, border: `1px solid ${C.dim}` }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: s.c }}>{s.v}</span>
+                <span style={{ fontSize: 7, color: C.ghost, letterSpacing: 1 }}>{s.l}</span>
+              </div>
+            ))}
+          </>
         )}
 
         <button
